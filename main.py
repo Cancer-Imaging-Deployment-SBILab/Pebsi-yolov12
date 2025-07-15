@@ -110,7 +110,7 @@ async def detect_boxes(
 
         if not os.path.exists(model_path) or not model_path or model_path == "":        
             model_path = DETECTION_MODEL_PATH
-        
+
         temp_dir = os.path.join(
             TEMP_FOLDER, f"{patient_id}_{test_id}_{filename}_{annotationId}"
         )
