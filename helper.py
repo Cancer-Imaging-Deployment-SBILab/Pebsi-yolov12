@@ -38,12 +38,16 @@ import math
 from PIL import Image, ImageEnhance, ImageFilter
 from typing import Union
 
+
+
 def process_results(results, save_crops=True, crop_dir="pipeline_output/crops"):
     image_detections = []
+
     for result in results:
-        image_name = os.path.split(result.path)[-1]
+        image_name = os.path.basename(result.path)
         image = cv2.imread(result.path)
         img_h, img_w = image.shape[:2]
+
         boxes = result.boxes.xywh.cpu().numpy()
         confs = result.boxes.conf.cpu().numpy()
         class_ids = result.boxes.cls.cpu().numpy().astype(int)
@@ -55,21 +59,71 @@ def process_results(results, save_crops=True, crop_dir="pipeline_output/crops"):
             x_center, y_center, w, h = xywh
             label = class_names[cls_id]
 
-            # Convert xywh to xyxy
-            x1 = int(max(0, x_center - w / 2))
-            y1 = int(max(0, y_center - h / 2))
-            x2 = int(min(img_w, x_center + w / 2))
-            y2 = int(min(img_h, y_center + h / 2))
+            # ------------------------------------------------------------------
+            # 1. DEFINE SQUARE CROP SIZE (MIN 256)
+            # ------------------------------------------------------------------
+            side = int(np.ceil(max(w, h)))
+            final_side = max(side, 256)
+
+            # ------------------------------------------------------------------
+            # 2. DEFINE SQUARE SOURCE WINDOW (NO CLIPPING)
+            # ------------------------------------------------------------------
+            x1 = int(np.floor(x_center - side / 2))
+            y1 = int(np.floor(y_center - side / 2))
+            x2 = x1 + side
+            y2 = y1 + side
 
             crop_path = None
             if save_crops:
-                crop_img = image[y1:y2, x1:x2]
+                # ------------------------------------------------------------------
+                # 3. CREATE FINAL BLACK CANVAS
+                # ------------------------------------------------------------------
+                crop_img = np.zeros((final_side, final_side, 3), dtype=np.uint8)
+
+                # Offset to center square inside final canvas (when side < 256)
+                offset = (final_side - side) // 2
+
+                # ------------------------------------------------------------------
+                # 4. COMPUTE VALID IMAGE REGION
+                # ------------------------------------------------------------------
+                src_x1 = max(0, x1)
+                src_y1 = max(0, y1)
+                src_x2 = min(img_w, x2)
+                src_y2 = min(img_h, y2)
+
+                # ------------------------------------------------------------------
+                # 5. DESTINATION COORDS IN CANVAS
+                # ------------------------------------------------------------------
+                dst_x1 = offset + (src_x1 - x1)
+                dst_y1 = offset + (src_y1 - y1)
+                dst_x2 = dst_x1 + (src_x2 - src_x1)
+                dst_y2 = dst_y1 + (src_y2 - src_y1)
+
+                # ------------------------------------------------------------------
+                # 6. COPY PIXELS
+                # ------------------------------------------------------------------
+                if src_x1 < src_x2 and src_y1 < src_y2:
+                    crop_img[
+                        dst_y1:dst_y2,
+                        dst_x1:dst_x2
+                    ] = image[
+                        src_y1:src_y2,
+                        src_x1:src_x2
+                    ]
+
+                # ------------------------------------------------------------------
+                # 7. SAVE
+                # ------------------------------------------------------------------
                 class_folder = os.path.join(crop_dir, label)
                 os.makedirs(class_folder, exist_ok=True)
-                crop_filename = f"{os.path.splitext(image_name)[0]}_{idx}.jpg"
+
+                crop_filename = f"{os.path.splitext(image_name)[0]}_{idx}.png"
                 crop_path = os.path.join(class_folder, crop_filename)
                 cv2.imwrite(crop_path, crop_img)
 
+            # ------------------------------------------------------------------
+            # 8. METADATA
+            # ------------------------------------------------------------------
             detections.append(
                 {
                     "object_id": str(uuid.uuid4()),
@@ -80,7 +134,7 @@ def process_results(results, save_crops=True, crop_dir="pipeline_output/crops"):
                     },
                     "sub_class": {"label": None, "confidence": None},
                     "segmentation": {"mask": None, "size": None},
-                    "crop_path": str(crop_path) if crop_path else None,
+                    "crop_path": crop_path,
                 }
             )
 
@@ -93,6 +147,7 @@ def process_results(results, save_crops=True, crop_dir="pipeline_output/crops"):
         )
 
     return image_detections
+
 
 
 def run_pipeline(
@@ -255,143 +310,131 @@ def apply_global_nms(annotations, iou_threshold=0.2, class_agnostic=True):
     return [annotations[i] for i in keep]
 
 
-# Convert to point annotations form bounding boxes
-def create_point_annotations_json(boxes_and_annotations, source_url, path):
-
-    annotations = []
-
-    for anno in boxes_and_annotations:
-        x, y, w, h = anno["boxes"]
-        x = x + w / 2
-        y = y + h
-
-        annotation = {
-            "@context": "http://www.w3.org/ns/anno.jsonld",
-            "type": "Annotation",
-            "id": f"#{anno['id']}",
-            "body": [],
-            "target": {
-                "source": source_url,
-                "selector": {
-                    "type": "FragmentSelector",
-                    "conformsTo": "http://www.w3.org/TR/media-frags/",
-                    "value": f"xywh=pixel:{x},{y},0,0",
-                },
-                "renderedVia": {"name": "point"},
-            },
-        }
-
-        # Add class and subclass bodies
-        if anno["main_class"]["label"] != None:
-            annotation["body"].append(
-                {
-                    "type": "TextualBody",
-                    "purpose": "tagging",
-                    "value": anno["main_class"]["label"],
-                    "source": "class",
-                }
-            )
-        if anno["sub_class"]["label"] != None:
-            annotation["body"].append(
-                {
-                    "type": "TextualBody",
-                    "purpose": "tagging",
-                    "value": anno["sub_class"]["label"],
-                    "source": "subclass",
-                }
-            )
-
-        annotations.append(annotation)
-    with open(path, "w") as f:
-        json.dump(annotations, f, indent=2)
-
-    # print(f"Annotations saved to {filename}")
-    return True
-
-
-def create_box_annotations_json(boxes_and_annotations, source_url, path):
-
-    annotations = []
-
-    for anno in boxes_and_annotations:
-        x_min, y_min, width, height = anno["boxes"]
-
-        annotation = {
-            "@context": "http://www.w3.org/ns/anno.jsonld",
-            "type": "Annotation",
-            "id": f"#{anno['id']}",
-            "body": [],
-            "target": {
-                "source": source_url,
-                "selector": {
-                    "type": "FragmentSelector",
-                    "conformsTo": "http://www.w3.org/TR/media-frags/",
-                    "value": f"xywh=pixel:{x_min},{y_min},{width},{height}",
-                },
-            },
-        }
-
-        # Add class and subclass bodies
-        if anno["main_class"]["label"] != None:
-            annotation["body"].append(
-                {
-                    "type": "TextualBody",
-                    "purpose": "tagging",
-                    "value": anno["main_class"]["label"],
-                    "source": "class",
-                }
-            )
-        if anno["sub_class"]["label"] != None:
-            annotation["body"].append(
-                {
-                    "type": "TextualBody",
-                    "purpose": "tagging",
-                    "value": anno["sub_class"]["label"],
-                    "source": "subclass",
-                }
-            )
-
-        annotations.append(annotation)
-    with open(path, "w") as f:
-        json.dump(annotations, f, indent=2)
-
-    # print(f"Annotations saved to {filename}")
-    return True
-
 
 def crop_region_from_slide(
-    slide_path, x, y, width, height, save_path, level=0, padding=40
+    slide_path,
+    x,
+    y,
+    width,
+    height,
+    save_path=None,
+    level=0,
+    padding=40,
+    min_size=256,
 ):
+    """
+    Returns or saves a square crop.
+
+    Rules:
+    - Black padding appears ONLY where the requested crop lies outside the slide.
+    - No black padding is added just to satisfy min_size.
+    - min_size is enforced by resizing.
+    """
+
+    # --------------------------------------------------------------
+    # CLASS-BASED PADDING OVERRIDE
+    # --------------------------------------------------------------
+    if save_path:
+        if "WBC" in save_path:
+            padding = 80
+        elif "RBC" in save_path:
+            padding = 40
+        elif "Platelet" in save_path:
+            padding = 20
+        elif "Artefact" in save_path:
+            padding = 80
+        else:
+            padding = 40
+
+    # --------------------------------------------------------------
+    # 1. DEFINE SQUARE CROP IN SLIDE COORDS
+    # --------------------------------------------------------------
+    padded_w = width + 2 * padding
+    padded_h = height + 2 * padding
+    side = int(math.ceil(max(padded_w, padded_h)))
+
+    x1 = int(math.floor(x + width / 2 - side / 2))
+    y1 = int(math.floor(y + height / 2 - side / 2))
+    x2 = x1 + side
+    y2 = y1 + side
+
+    # --------------------------------------------------------------
+    # 2. READ AVAILABLE REGION FROM SLIDE / IMAGE
+    # --------------------------------------------------------------
     try:
         slide = openslide.OpenSlide(slide_path)
         slide_width, slide_height = slide.dimensions
-        x_padded = int(math.floor(max(x - padding, 0)))
-        y_padded = int(math.floor(max(y - padding, 0)))
-        x_max = int(math.ceil(min(x + width + padding, slide_width)))
-        y_max = int(math.ceil(min(y + height + padding, slide_height)))
-        w_padded = x_max - x_padded
-        h_padded = y_max - y_padded
+
+        src_x1 = max(0, x1)
+        src_y1 = max(0, y1)
+        src_x2 = min(slide_width, x2)
+        src_y2 = min(slide_height, y2)
+
+        if src_x1 >= src_x2 or src_y1 >= src_y2:
+            return None
 
         region = slide.read_region(
-            (x_padded, y_padded), level, (w_padded, h_padded)
+            (src_x1, src_y1),
+            level,
+            (src_x2 - src_x1, src_y2 - src_y1),
         ).convert("RGB")
+
     except OpenSlideUnsupportedFormatError:
-        # Fallback to PIL if the file isn't an OpenSlide-compatible slide
         image = Image.open(slide_path).convert("RGB")
         img_width, img_height = image.size
-        x_padded = int(math.floor(max(x - padding, 0)))
-        y_padded = int(math.floor(max(y - padding, 0)))
-        x_max = int(math.ceil(min(x + width + padding, img_width)))
-        y_max = int(math.ceil(min(y + height + padding, img_height)))
-        region = image.crop((x_padded, y_padded, x_max, y_max))
 
-    if save_path:
-        final_path = os.path.join(save_path, f"{x_padded}_{y_padded}.png")
-        os.makedirs(os.path.dirname(final_path), exist_ok=True)
-        region.save(final_path)
-        return final_path
+        src_x1 = max(0, x1)
+        src_y1 = max(0, y1)
+        src_x2 = min(img_width, x2)
+        src_y2 = min(img_height, y2)
+
+        if src_x1 >= src_x2 or src_y1 >= src_y2:
+            return None
+
+        region = image.crop((src_x1, src_y1, src_x2, src_y2))
+
+    crosses_boundary = (
+        src_x1 > x1 or src_y1 > y1 or src_x2 < x2 or src_y2 < y2
+    )
+
+    # --------------------------------------------------------------
+    # 3. HANDLE BOUNDARIES & min_size (CORRECTLY)
+    # --------------------------------------------------------------
+    if not crosses_boundary:
+        # Fully inside slide → NO black padding
+        crop_img = region
+
+        if side < min_size:
+            crop_img = crop_img.resize(
+                (min_size, min_size), Image.BILINEAR
+            )
+
     else:
-        return region
+        # Crosses slide boundary → black ONLY where pixels are missing
+        crop_img = Image.new("RGB", (side, side), (0, 0, 0))
+
+        dst_x = src_x1 - x1
+        dst_y = src_y1 - y1
+
+        crop_img.paste(region, (dst_x, dst_y))
+
+        if side < min_size:
+            crop_img = crop_img.resize(
+                (min_size, min_size), Image.BILINEAR
+            )
+
+    # --------------------------------------------------------------
+    # 4. SAVE OR RETURN
+    # --------------------------------------------------------------
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        final_path = os.path.join(save_path, f"{x}_{y}.png")
+        crop_img.save(final_path)
+        return final_path
+
+    return crop_img
+
+
 
 
 async def crop_and_save(
@@ -586,61 +629,6 @@ async def update_annotations_db(
     return True
 
 
-# def apply_filters(
-#     image_path: str,
-#     brightness_factor: float = 1.0,
-#     saturation_factor: float = 1.0,
-#     contrast_factor: float = 1.0,
-#     method: str = '',
-#     strength: Union[int, float] = 2
-# ) -> Image.Image:
-#     """
-#     Apply brightness, contrast, saturation, and a low-pass filter to an image.
-
-#     Parameters:
-#         image_path (str): Path to the input image.
-#         brightness_factor (float): Brightness multiplier (1.0 = original).
-#         saturation_factor (float): Saturation multiplier (1.0 = original).
-#         contrast_factor (float): Contrast multiplier (1.0 = original).
-#         method (str): Low-pass filter type ('gaussian', 'box', 'median').
-#         strength (int or float): Strength of the filter (radius or kernel size).
-
-#     Returns:
-#         PIL.Image.Image: The processed image.
-#     """
-#     image = Image.open(image_path)
-#     filtered = image.copy()
-
-#     # Apply brightness
-#     if not brightness_factor == 1: 
-#         bright_enhancer = ImageEnhance.Brightness(image)
-#         filtered = bright_enhancer.enhance(brightness_factor)
-
-#     # Apply contrast
-#     if not contrast_factor == 1: 
-#         contrast_enhancer = ImageEnhance.Contrast(filtered)
-#         filtered = contrast_enhancer.enhance(contrast_factor)
-
-#     # Apply saturation
-#     if not saturation_factor == 1: 
-#         color_enhancer = ImageEnhance.Color(filtered)
-#         filtered = color_enhancer.enhance(saturation_factor)
-
-#     # Apply selected low-pass filter
-#     if method == 'gaussian':
-#         filtered = filtered.filter(ImageFilter.GaussianBlur(radius=strength))
-#     elif method == 'box':
-#         filtered = filtered.filter(ImageFilter.BoxBlur(radius=strength))
-#     elif method == 'median':
-#         size = strength if isinstance(strength, int) and strength % 2 == 1 else int(strength) + 1
-#         filtered = filtered.filter(ImageFilter.MedianFilter(size=size))
-#     else:
-#         pass
-
-#     return filtered
-
-import cv2
-import numpy as np
 
 def apply_filters(
     image_path: str,
