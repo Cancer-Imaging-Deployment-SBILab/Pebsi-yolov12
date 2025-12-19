@@ -320,15 +320,15 @@ def crop_region_from_slide(
     save_path=None,
     level=0,
     padding=40,
-    min_size=256,
+    min_size=300,
 ):
     """
     Returns or saves a square crop.
 
     Rules:
     - Black padding appears ONLY where the requested crop lies outside the slide.
-    - No black padding is added just to satisfy min_size.
-    - min_size is enforced by resizing.
+    - No resizing is ever performed.
+    - min_size is enforced by expanding the crop region.
     """
 
     # --------------------------------------------------------------
@@ -337,21 +337,30 @@ def crop_region_from_slide(
     if save_path:
         if "WBC" in save_path:
             padding = 80
+            min_size = 350
         elif "RBC" in save_path:
             padding = 40
+            min_size = 200
         elif "Platelet" in save_path:
             padding = 20
+            min_size = 100
         elif "Artefact" in save_path:
             padding = 80
+            min_size = 300
         else:
             padding = 40
+            min_size = 100
 
     # --------------------------------------------------------------
-    # 1. DEFINE SQUARE CROP IN SLIDE COORDS
+    # 1. DEFINE SQUARE CROP IN SLIDE COORDS (NO RESIZING)
     # --------------------------------------------------------------
     padded_w = width + 2 * padding
     padded_h = height + 2 * padding
+
     side = int(math.ceil(max(padded_w, padded_h)))
+
+    # Enforce min_size by EXPANDING CROP AREA
+    side = max(side, min_size)
 
     x1 = int(math.floor(x + width / 2 - side / 2))
     y1 = int(math.floor(y + height / 2 - side / 2))
@@ -398,17 +407,11 @@ def crop_region_from_slide(
     )
 
     # --------------------------------------------------------------
-    # 3. HANDLE BOUNDARIES & min_size (CORRECTLY)
+    # 3. HANDLE BOUNDARIES (BLACK ONLY WHERE NEEDED)
     # --------------------------------------------------------------
     if not crosses_boundary:
         # Fully inside slide → NO black padding
         crop_img = region
-
-        if side < min_size:
-            crop_img = crop_img.resize(
-                (min_size, min_size), Image.BILINEAR
-            )
-
     else:
         # Crosses slide boundary → black ONLY where pixels are missing
         crop_img = Image.new("RGB", (side, side), (0, 0, 0))
@@ -417,11 +420,6 @@ def crop_region_from_slide(
         dst_y = src_y1 - y1
 
         crop_img.paste(region, (dst_x, dst_y))
-
-        if side < min_size:
-            crop_img = crop_img.resize(
-                (min_size, min_size), Image.BILINEAR
-            )
 
     # --------------------------------------------------------------
     # 4. SAVE OR RETURN
@@ -433,7 +431,6 @@ def crop_region_from_slide(
         return final_path
 
     return crop_img
-
 
 
 
