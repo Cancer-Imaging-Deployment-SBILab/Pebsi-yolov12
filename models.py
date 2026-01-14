@@ -59,6 +59,7 @@ class User(Base):
     reports = relationship("Report", back_populates="generated_by")
     assignments_created = relationship("TestAssignment", back_populates="assigned_by", foreign_keys="TestAssignment.assigned_by_user_id")
     assignments_received = relationship("TestAssignment", back_populates="assigned_to", foreign_keys="TestAssignment.assigned_to_user_id")
+    audit_logs = relationship("AuditLog", back_populates="user")
 
 
 # TODO Chaniging for ma'am to be changed
@@ -286,3 +287,19 @@ class TestAssignment(Base):
     assigned_by = relationship("User", back_populates="assignments_created", foreign_keys=[assigned_by_user_id])
     assigned_to = relationship("User", back_populates="assignments_received", foreign_keys=[assigned_to_user_id])
     test = relationship("Test", back_populates="assignments")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    action = Column(String, nullable=False)
+    table_name = Column(String, nullable=False)
+    old_data = Column(JSON, nullable=True)
+    new_data = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="audit_logs")

@@ -22,7 +22,6 @@ from models import (
     TestEnum,
     User,
     Patient,
-    Test,
     Sample,
     Report,
     CompleteBloodCount,
@@ -547,32 +546,32 @@ async def crop_and_save(
 async def update_annotations_db(
     db, patient_id, test_id, filename, annotationId, all_annotations
 ):
-    test_query = select(Test).where(Test.id == test_id)
-    test_result = await db.execute(test_query)
-    test = test_result.scalar_one_or_none()
-    if not test:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Test not found or does not belong to this patient.",
+    from sqlalchemy.orm import selectinload
+    
+    # Use JOIN to fetch Sample with Annotations in a single query
+    sample_query = (
+        select(Sample)
+        .where(
+            Sample.test_id == test_id,
+            Sample.sample_location.like(f"%/{filename}.%"),
         )
-    # Check if sample exists and belongs to the test
-    sample_query = select(Sample).where(
-        Sample.test_id == test_id,
-        Sample.sample_location.like(f"%/{filename}.%"),
+        .options(selectinload(Sample.annotations))
     )
     sample_result = await db.execute(sample_query)
     sample = sample_result.scalar_one_or_none()
     if not sample:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Test not found or does not belong to this patient.",
+            detail="Sample not found or does not belong to this test.",
         )
-    annotation_query = select(Annotation).where(
-        Annotation.id == annotationId,
-        Annotation.sample_id == sample.id,
-    )
-    annotation_result = await db.execute(annotation_query)
-    existing_annotation = annotation_result.scalar_one_or_none()
+    
+    # Find the annotation from preloaded annotations
+    existing_annotation = None
+    for anno in sample.annotations:
+        if str(anno.id) == annotationId:
+            existing_annotation = anno
+            break
+    
     if not existing_annotation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

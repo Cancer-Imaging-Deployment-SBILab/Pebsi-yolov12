@@ -29,7 +29,8 @@ import torch
 import gc
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import initialize_database, get_db
+from database import initialize_database, get_db, create_tables
+from audit import set_current_user
 import logging
 from fastapi import Request
 from datetime import datetime
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI):
     # Startup
     try:
         await initialize_database()
+        await create_tables()
         print("Database initialized successfully!")
     except Exception as e:
         print(f"Failed to initialize database: {e}")
@@ -96,9 +98,15 @@ async def detect_boxes(
     background_tasks: BackgroundTasks,
     data: DetectBoxesRequest,
     db: db_dependency,
+    request: Request,
 ):
 
     try:
+        # Best-effort: stash user_id into audit context if provided by caller (body or header)
+        body_user = getattr(data, "user_id", None)
+        header_user = request.headers.get("x-user-id") if request else None
+        set_current_user(body_user or header_user)
+
         patient_id = data.patient_id
         test_id = data.test_id
         filename = data.filename
@@ -176,6 +184,7 @@ async def detect_boxes(
             status_code=status.HTTP_200_OK,
         )
     except Exception as e:
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error in detect_boxes: {e}",
@@ -189,5 +198,5 @@ async def detect_boxes(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=False)
-    # uvicorn.run("main:app", host="0.0.0.0", port=8201, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=False, workesrs=4)
+    # uvicorn.run("main:app", host="0.0.0.0", port=8201, reload=True, workesrs=4)
