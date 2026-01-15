@@ -11,6 +11,7 @@ from sqlalchemy import (
     Float,
     text,
     func,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSON
 from sqlalchemy.orm import relationship
@@ -49,17 +50,24 @@ class User(Base):
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
 
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, index=True)
     phone_no = Column(String, nullable=False)
-    employee_id = Column(String, unique=True, nullable=False)
+    employee_id = Column(String, unique=True, nullable=False, index=True)
     password = Column(String, nullable=False)
-    role = Column(Enum(RoleEnum), nullable=False)
+    role = Column(Enum(RoleEnum), nullable=False, index=True)
     status = Column(Enum(StatusEnum), nullable=False, server_default=text("'active'"))
 
     reports = relationship("Report", back_populates="generated_by")
     assignments_created = relationship("TestAssignment", back_populates="assigned_by", foreign_keys="TestAssignment.assigned_by_user_id")
     assignments_received = relationship("TestAssignment", back_populates="assigned_to", foreign_keys="TestAssignment.assigned_to_user_id")
     audit_logs = relationship("AuditLog", back_populates="user")
+
+    __table_args__ = (
+        Index('idx_users_id', 'id'),
+        Index('idx_users_name', 'name'),
+        Index('idx_users_employee_id', 'employee_id'),
+        Index('idx_users_role', 'role'),
+    )
 
 
 # TODO Chaniging for ma'am to be changed
@@ -70,18 +78,26 @@ class Patient(Base):
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
 
-    name = Column(String, nullable=False)
-    uhid = Column(String, unique=True, nullable=False)
-    dob = Column(Date, nullable=False)
+    name = Column(String, nullable=False, index=True)
+    uhid = Column(String, unique=True, nullable=False, index=True)
+    dob = Column(Date, nullable=False, index=True)
     phone_no = Column(String, nullable=False)
     # TODO: Make Aadhar unique
-    aadhar = Column(String, nullable=False)
+    aadhar = Column(String, nullable=False, index=True)
     gender = Column(Enum(GenderEnum), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     tests = relationship("Test", back_populates="patient")
     samples = relationship("Sample", back_populates="patient")
     reports = relationship("Report", back_populates="patient")
+
+    __table_args__ = (
+        Index('idx_patients_id', 'id'),
+        Index('idx_patients_name', 'name'),
+        Index('idx_patients_uhid', 'uhid'),
+        Index('idx_patients_dob', 'dob'),
+        Index('idx_patients_aadhar', 'aadhar'),
+    )
 
 
 class Test(Base):
@@ -90,12 +106,12 @@ class Test(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True)
     # For now, we are using a custom sample ID to identify tests
-    custom_sample_id = Column(String, unique=True, nullable=False)
+    custom_sample_id = Column(String, unique=True, nullable=False, index=True)
     condition = Column(String, nullable=False)
 
-    test_name = Column(Enum(TestEnum), nullable=False)
+    test_name = Column(Enum(TestEnum), nullable=False, index=True)
     test_datetime = Column(DateTime(timezone=True), server_default=func.now())
 
     patient = relationship("Patient", back_populates="tests")
@@ -104,6 +120,13 @@ class Test(Base):
     blood_counts = relationship("CompleteBloodCount", back_populates="test")
     assignments = relationship("TestAssignment", back_populates="test")
 
+    __table_args__ = (
+        Index('idx_tests_id', 'id'),
+        Index('idx_tests_patient_id', 'patient_id'),
+        Index('idx_tests_custom_sample_id', 'custom_sample_id'),
+        Index('idx_tests_test_name', 'test_name'),
+    )
+
 
 class Sample(Base):
     __tablename__ = "samples"
@@ -111,9 +134,9 @@ class Sample(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False)
-    isProcessed = Column(Boolean, nullable=False, default=False)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True)
+    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
+    isProcessed = Column(Boolean, nullable=False, default=False, index=True)
 
     sample_location = Column(String, nullable=False)
     sample_datetime = Column(DateTime(timezone=True), server_default=func.now())
@@ -123,6 +146,13 @@ class Sample(Base):
     cbc = relationship("CompleteBloodCount", back_populates="sample", uselist=False)
     annotations = relationship("Annotation", back_populates="sample")
 
+    __table_args__ = (
+        Index('idx_samples_id', 'id'),
+        Index('idx_samples_patient_id', 'patient_id'),
+        Index('idx_samples_test_id', 'test_id'),
+        Index('idx_samples_isProcessed', 'isProcessed'),
+    )
+
 
 class Report(Base):
     __tablename__ = "reports"
@@ -130,17 +160,24 @@ class Report(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True)
+    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
 
     diagnosis = Column(String, nullable=False)
     report_location = Column(String, nullable=False)
     report_datetime = Column(DateTime(timezone=True), server_default=func.now())
-    generated_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    generated_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     patient = relationship("Patient", back_populates="reports")
     test = relationship("Test", back_populates="report")
     generated_by = relationship("User", back_populates="reports")
+
+    __table_args__ = (
+        Index('idx_reports_id', 'id'),
+        Index('idx_reports_patient_id', 'patient_id'),
+        Index('idx_reports_test_id', 'test_id'),
+        Index('idx_reports_generated_by_id', 'generated_by_id'),
+    )
 
 
 class CompleteBloodCount(Base):
@@ -150,9 +187,9 @@ class CompleteBloodCount(Base):
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     sample_id = Column(
-        UUID(as_uuid=True), ForeignKey("samples.id"), unique=True, nullable=False
+        UUID(as_uuid=True), ForeignKey("samples.id"), unique=True, nullable=False, index=True
     )
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False)
+    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
 
     haemoglobin = Column(Float)
     pcv = Column(Float)
@@ -186,26 +223,42 @@ class CompleteBloodCount(Base):
     sample = relationship("Sample", back_populates="cbc")
     test = relationship("Test", back_populates="blood_counts")
 
+    __table_args__ = (
+        Index('idx_cbc_id', 'id'),
+        Index('idx_cbc_sample_id', 'sample_id'),
+        Index('idx_cbc_test_id', 'test_id'),
+    )
+
 
 class Annotation(Base):
     __tablename__ = "annotations"
 
     id = Column(String, primary_key=True)
-    sample_id = Column(UUID(as_uuid=True), ForeignKey("samples.id"), nullable=False)
+    sample_id = Column(UUID(as_uuid=True), ForeignKey("samples.id"), nullable=False, index=True)
     source = Column(String, nullable=False)
     type = Column(String, nullable=False)
     tool = Column(String, nullable=False)
     height = Column(Integer, nullable=False)
     width = Column(Integer, nullable=False)
-    isProcessed = Column(Boolean, nullable=False, default=False)
-    isClassDetected = Column(Boolean, nullable=False, default=False)
-    isSubClassDetected = Column(Boolean, nullable=False, default=False)
-    isSegmented = Column(Boolean, nullable=False, default=False)
+    isProcessed = Column(Boolean, nullable=False, default=False, index=True)
+    isClassDetected = Column(Boolean, nullable=False, default=False, index=True)
+    isSubClassDetected = Column(Boolean, nullable=False, default=False, index=True)
+    isSegmented = Column(Boolean, nullable=False, default=False, index=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     sample = relationship("Sample", back_populates="annotations")
     annotation_boxes = relationship("AnnotationBox", back_populates="annotation")
+
+    __table_args__ = (
+        Index('idx_annotations_id', 'id'),
+        Index('idx_annotations_sample_id', 'sample_id'),
+        Index('idx_annotations_isProcessed', 'isProcessed'),
+        Index('idx_annotations_isClassDetected', 'isClassDetected'),
+        Index('idx_annotations_isSubClassDetected', 'isSubClassDetected'),
+        Index('idx_annotations_isSegmented', 'isSegmented'),
+        Index('idx_annotations_created_at', 'created_at'),
+    )
 
 
 class AnnotationBox(Base):
@@ -214,11 +267,11 @@ class AnnotationBox(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    annotation_id = Column(String, ForeignKey("annotations.id"), nullable=False)
+    annotation_id = Column(String, ForeignKey("annotations.id"), nullable=False, index=True)
     boxes = Column(JSON, nullable=False)
-    class_name = Column(String, nullable=True)
+    class_name = Column(String, nullable=True, index=True)
     class_confidence = Column(Float, nullable=True)
-    sub_class = Column(String, nullable=True)
+    sub_class = Column(String, nullable=True, index=True)
     sub_class_confidence = Column(Float, nullable=True)
     crop_path = Column(String, nullable=True)
     segmentation_polygon = Column(JSON, nullable=True)
@@ -226,6 +279,13 @@ class AnnotationBox(Base):
 
     annotation = relationship("Annotation", back_populates="annotation_boxes")
     wbc_sub_class_confidences = relationship("WBCSubClassConfidences", back_populates="annotation_box", uselist=False)
+
+    __table_args__ = (
+        Index('idx_annotation_boxes_id', 'id'),
+        Index('idx_annotation_boxes_annotation_id', 'annotation_id'),
+        Index('idx_annotation_boxes_class_name', 'class_name'),
+        Index('idx_annotation_boxes_sub_class', 'sub_class'),
+    )
 
 
 class WBCSubClassConfidences(Base):
@@ -235,7 +295,7 @@ class WBCSubClassConfidences(Base):
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     annotation_box_id = Column(
-        UUID(as_uuid=True), ForeignKey("annotation_boxes.id"), unique=True, nullable=False
+        UUID(as_uuid=True), ForeignKey("annotation_boxes.id"), unique=True, nullable=False, index=True
     )
     neutrophil_confidence = Column(Float, nullable=True)
     lymphocyte_confidence = Column(Float, nullable=True)
@@ -246,6 +306,11 @@ class WBCSubClassConfidences(Base):
 
     annotation_box = relationship("AnnotationBox", back_populates="wbc_sub_class_confidences")
 
+    __table_args__ = (
+        Index('idx_wbc_sub_class_confidences_id', 'id'),
+        Index('idx_wbc_sub_class_confidences_annotation_box_id', 'annotation_box_id'),
+    )
+
 
 class CellClasses(Base):
     __tablename__ = "cell_classes"
@@ -253,11 +318,16 @@ class CellClasses(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    name = Column(String, nullable=False, unique=True)
+    name = Column(String, nullable=False, unique=True, index=True)
     colors = Column(JSON, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     sub_classes = relationship("CellSubClasses", back_populates="cell_class")
+
+    __table_args__ = (
+        Index('idx_cell_classes_id', 'id'),
+        Index('idx_cell_classes_name', 'name'),
+    )
 
 
 class CellSubClasses(Base):
@@ -266,11 +336,17 @@ class CellSubClasses(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    class_id = Column(UUID(as_uuid=True), ForeignKey("cell_classes.id"), nullable=False)
-    sub_class_name = Column(String, nullable=False)
+    class_id = Column(UUID(as_uuid=True), ForeignKey("cell_classes.id"), nullable=False, index=True)
+    sub_class_name = Column(String, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     cell_class = relationship("CellClasses", back_populates="sub_classes")
+
+    __table_args__ = (
+        Index('idx_cell_sub_classes_id', 'id'),
+        Index('idx_cell_sub_classes_class_id', 'class_id'),
+        Index('idx_cell_sub_classes_sub_class_name', 'sub_class_name'),
+    )
 
 
 class TestAssignment(Base):
@@ -279,14 +355,21 @@ class TestAssignment(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    assigned_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    assigned_to_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False)
+    assigned_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    assigned_to_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
 
     assigned_by = relationship("User", back_populates="assignments_created", foreign_keys=[assigned_by_user_id])
     assigned_to = relationship("User", back_populates="assignments_received", foreign_keys=[assigned_to_user_id])
     test = relationship("Test", back_populates="assignments")
+
+    __table_args__ = (
+        Index('idx_test_assignments_id', 'id'),
+        Index('idx_test_assignments_assigned_by_user_id', 'assigned_by_user_id'),
+        Index('idx_test_assignments_assigned_to_user_id', 'assigned_to_user_id'),
+        Index('idx_test_assignments_test_id', 'test_id'),
+    )
 
 
 class AuditLog(Base):
@@ -295,11 +378,19 @@ class AuditLog(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    action = Column(String, nullable=False)
-    table_name = Column(String, nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    action = Column(String, nullable=False, index=True)
+    table_name = Column(String, nullable=False, index=True)
     old_data = Column(JSON, nullable=True)
     new_data = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     user = relationship("User", back_populates="audit_logs")
+
+    __table_args__ = (
+        Index('idx_audit_logs_id', 'id'),
+        Index('idx_audit_logs_user_id', 'user_id'),
+        Index('idx_audit_logs_action', 'action'),
+        Index('idx_audit_logs_table_name', 'table_name'),
+        Index('idx_audit_logs_created_at', 'created_at'),
+    )
