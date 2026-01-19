@@ -1,4 +1,6 @@
 import enum
+from datetime import datetime, timezone
+import pytz
 from sqlalchemy import (
     Boolean,
     Column,
@@ -16,6 +18,29 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSON
 from sqlalchemy.orm import relationship
 from database import Base
+
+
+def convert_utc_to_timezone(utc_dt: datetime, tz_str: str = "Asia/Kolkata") -> datetime:
+    """
+    Convert a UTC datetime to the specified timezone.
+    
+    Args:
+        utc_dt: A datetime object in UTC
+        tz_str: Timezone string (e.g., 'Asia/Kolkata', 'America/New_York')
+        
+    Returns:
+        datetime: The datetime converted to the specified timezone
+    """
+    if utc_dt is None:
+        return None
+    
+    # Ensure the datetime is timezone-aware (UTC)
+    if utc_dt.tzinfo is None:
+        utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+    
+    # Convert to target timezone
+    target_tz = pytz.timezone(tz_str)
+    return utc_dt.astimezone(target_tz)
 
 
 # Enums
@@ -56,11 +81,21 @@ class User(Base):
     password = Column(String, nullable=False)
     role = Column(Enum(RoleEnum), nullable=False, index=True)
     status = Column(Enum(StatusEnum), nullable=False, server_default=text("'active'"))
+    failed_login_attempts = Column(Integer, nullable=False, server_default=text("0"))
 
     reports = relationship("Report", back_populates="generated_by")
-    assignments_created = relationship("TestAssignment", back_populates="assigned_by", foreign_keys="TestAssignment.assigned_by_user_id")
-    assignments_received = relationship("TestAssignment", back_populates="assigned_to", foreign_keys="TestAssignment.assigned_to_user_id")
+    assignments_created = relationship(
+        "TestAssignment",
+        back_populates="assigned_by",
+        foreign_keys="TestAssignment.assigned_by_user_id",
+    )
+    assignments_received = relationship(
+        "TestAssignment",
+        back_populates="assigned_to",
+        foreign_keys="TestAssignment.assigned_to_user_id",
+    )
     audit_logs = relationship("AuditLog", back_populates="user")
+    sessions = relationship("Session", back_populates="user")
 
     __table_args__ = (
         Index('idx_users_id', 'id'),
@@ -110,6 +145,7 @@ class Test(Base):
     # For now, we are using a custom sample ID to identify tests
     custom_sample_id = Column(String, unique=True, nullable=False, index=True)
     condition = Column(String, nullable=False)
+    in_use = Column(Boolean, nullable=False, default=False)
 
     test_name = Column(Enum(TestEnum), nullable=False, index=True)
     test_datetime = Column(DateTime(timezone=True), server_default=func.now())
@@ -278,7 +314,9 @@ class AnnotationBox(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     annotation = relationship("Annotation", back_populates="annotation_boxes")
-    wbc_sub_class_confidences = relationship("WBCSubClassConfidences", back_populates="annotation_box", uselist=False)
+    wbc_sub_class_confidences = relationship(
+        "WBCSubClassConfidences", back_populates="annotation_box", uselist=False
+    )
 
     __table_args__ = (
         Index('idx_annotation_boxes_id', 'id'),
@@ -295,7 +333,11 @@ class WBCSubClassConfidences(Base):
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     annotation_box_id = Column(
-        UUID(as_uuid=True), ForeignKey("annotation_boxes.id"), unique=True, nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("annotation_boxes.id"),
+        unique=True,
+        nullable=False,
+        index=True,
     )
     neutrophil_confidence = Column(Float, nullable=True)
     lymphocyte_confidence = Column(Float, nullable=True)
@@ -304,7 +346,9 @@ class WBCSubClassConfidences(Base):
     basophil_confidence = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    annotation_box = relationship("AnnotationBox", back_populates="wbc_sub_class_confidences")
+    annotation_box = relationship(
+        "AnnotationBox", back_populates="wbc_sub_class_confidences"
+    )
 
     __table_args__ = (
         Index('idx_wbc_sub_class_confidences_id', 'id'),
@@ -355,13 +399,23 @@ class TestAssignment(Base):
     id = Column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    assigned_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    assigned_to_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    assigned_by_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    assigned_to_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
     test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    assigned_by = relationship("User", back_populates="assignments_created", foreign_keys=[assigned_by_user_id])
-    assigned_to = relationship("User", back_populates="assignments_received", foreign_keys=[assigned_to_user_id])
+    assigned_by = relationship(
+        "User", back_populates="assignments_created", foreign_keys=[assigned_by_user_id]
+    )
+    assigned_to = relationship(
+        "User",
+        back_populates="assignments_received",
+        foreign_keys=[assigned_to_user_id],
+    )
     test = relationship("Test", back_populates="assignments")
 
     __table_args__ = (
@@ -381,6 +435,7 @@ class AuditLog(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     action = Column(String, nullable=False, index=True)
     table_name = Column(String, nullable=False, index=True)
+    user_ip_address = Column(String, nullable=False, server_default=text("inet_client_addr()"))
     old_data = Column(JSON, nullable=True)
     new_data = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
@@ -393,4 +448,29 @@ class AuditLog(Base):
         Index('idx_audit_logs_action', 'action'),
         Index('idx_audit_logs_table_name', 'table_name'),
         Index('idx_audit_logs_created_at', 'created_at'),
+    )
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    refresh_token_hash = Column(String, nullable=False)
+    user_ip_address = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    last_activity_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    revoked = Column(Boolean, nullable=False, default=False, index=True)
+
+    user = relationship("User", back_populates="sessions")
+
+    __table_args__ = (
+        Index('idx_sessions_id', 'id'),
+        Index('idx_sessions_user_id', 'user_id'),
+        Index('idx_sessions_refresh_token_hash', 'refresh_token_hash'),
+        Index('idx_sessions_expires_at', 'expires_at'),
+        Index('idx_sessions_revoked', 'revoked'),
     )
