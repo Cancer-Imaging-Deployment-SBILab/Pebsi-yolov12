@@ -13,7 +13,7 @@ from fastapi import (
 from fastapi import status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from config import BASE_DIR
+from config import BASE_DIR, INTERNAL_SERVICE_API_KEY, INTERNAL_SERVICE_API_KEY_HEADER
 import os
 from schemas import DetectBoxesRequest
 from helper import (
@@ -34,6 +34,35 @@ from audit import set_current_user
 import logging
 from fastapi import Request
 from datetime import datetime
+import secrets
+
+
+def verify_internal_service_key(request: Request):
+    """
+    Verify the internal service API key from the request header.
+    This ensures only authorized internal services can access this API.
+    
+    Args:
+        request: FastAPI Request object
+        
+    Raises:
+        HTTPException: If the API key is missing or invalid
+    """
+    api_key = request.headers.get(INTERNAL_SERVICE_API_KEY_HEADER)
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing internal service API key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    
+    # Use constant-time comparison to prevent timing attacks
+    if not secrets.compare_digest(api_key, INTERNAL_SERVICE_API_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid internal service API key",
+        )
 
 
 @asynccontextmanager
@@ -99,6 +128,7 @@ async def detect_boxes(
     data: DetectBoxesRequest,
     db: db_dependency,
     request: Request,
+    _: None = Depends(verify_internal_service_key),
 ):
 
     try:
