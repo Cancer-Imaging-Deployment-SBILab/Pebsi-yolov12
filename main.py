@@ -36,6 +36,38 @@ from fastapi import Request
 from datetime import datetime
 import secrets
 
+# Constants and Configuration
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+LOG_FILE = os.path.join(LOG_DIR, "detection_api_calls.log")
+
+# Ensure directories exist
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Logging Configuration - Create a dedicated logger with file handler
+logger = logging.getLogger("pebsi_yolo12")
+logger.setLevel(logging.INFO)
+logger.handlers.clear()  # Clear any existing handlers
+
+# File handler for logging to file (overwrite on restart)
+file_handler = logging.FileHandler(LOG_FILE, mode='w', encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+))
+logger.addHandler(file_handler)
+
+# Console handler for logging to stdout
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+))
+logger.addHandler(console_handler)
+
+logger.propagate = False  # Prevent duplicate logs
+
 
 def verify_internal_service_key(request: Request):
     """
@@ -114,6 +146,41 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+
+
+# Middleware to log requests
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """
+    Middleware to log HTTP requests and their processing time.
+
+    This middleware function logs information about incoming HTTP requests, including
+    the client IP, HTTP method, path, status code, and request processing duration.
+
+    Args:
+        request: The incoming HTTP request object
+        call_next: The next middleware or route handler in the chain
+
+    Returns:
+        Response: The HTTP response from the next middleware or route handler
+    """
+    start_time = datetime.now()
+    client_ip = request.client.host if request.client else "unknown"
+    
+    logger.info(f"REQUEST: {client_ip} - {request.method} {request.url.path}")
+
+    try:
+        response = await call_next(request)
+        
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.info(
+            f"RESPONSE: {client_ip} - {request.method} {request.url.path} - Status {response.status_code} - Duration {duration:.3f}s"
+        )
+        return response
+    except Exception as e:
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.error(f"ERROR: {client_ip} - {request.method} {request.url.path} - {str(e)} - Duration {duration:.3f}s")
+        raise
 
 
 # Root endpoint

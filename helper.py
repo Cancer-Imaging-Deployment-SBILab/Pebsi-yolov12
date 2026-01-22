@@ -619,6 +619,7 @@ async def update_annotations_db(
                 class_confidence=anno["main_class"]["confidence"],
                 sub_class_confidence=anno["sub_class"]["confidence"],
                 crop_path=anno.get("crop_path", None),
+                isModelClass=True,
             )
             db.add(new_box)
     await db.commit()

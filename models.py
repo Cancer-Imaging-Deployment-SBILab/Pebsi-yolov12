@@ -269,6 +269,8 @@ class AnnotationBox(Base):
 
     crop_path = Column(String)
     segmentation_polygon = Column(JSON)
+    isModelClass = Column(Boolean, nullable=False, default=False)
+    isModelSubClass = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     annotation = relationship("Annotation", back_populates="annotation_boxes")
@@ -340,6 +342,10 @@ class CellSubClasses(Base):
 # ======================================================
 # Test Assignment
 # ======================================================
+# This table supports assigning a test to MULTIPLE users.
+# Each row represents one user assigned to a test.
+# The unique constraint on (test_id, assigned_to_user_id) prevents
+# the same user from being assigned to the same test twice.
 class TestAssignment(Base):
     __tablename__ = "test_assignments"
 
@@ -354,7 +360,20 @@ class TestAssignment(Base):
     test = relationship("Test", back_populates="assignments")
 
     __table_args__ = (
+        # Composite index for efficient lookups by assigned user and test
         Index("idx_assignment_to_test", "assigned_to_user_id", "test_id"),
+        # Composite index for efficient lookups by test (to find all assigned users)
+        Index("idx_assignment_test_users", "test_id", "assigned_to_user_id"),
+        # Unique constraint to prevent duplicate assignments (same user assigned to same test twice)
+        {"extend_existing": True},
+    )
+    
+    # Add unique constraint at table level
+    __table_args__ = (
+        Index("idx_assignment_to_test", "assigned_to_user_id", "test_id"),
+        Index("idx_assignment_test_users", "test_id", "assigned_to_user_id"),
+        # Unique constraint: a user can only be assigned to a specific test once
+        Index("uq_test_assignment_user_test", "test_id", "assigned_to_user_id", unique=True),
     )
 
 
