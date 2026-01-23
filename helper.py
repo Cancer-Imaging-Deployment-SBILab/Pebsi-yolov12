@@ -38,7 +38,6 @@ from PIL import Image, ImageEnhance, ImageFilter
 from typing import Union
 
 
-
 def process_results(results, save_crops=True, crop_dir="pipeline_output/crops"):
     image_detections = []
 
@@ -102,12 +101,8 @@ def process_results(results, save_crops=True, crop_dir="pipeline_output/crops"):
                 # 6. COPY PIXELS
                 # ------------------------------------------------------------------
                 if src_x1 < src_x2 and src_y1 < src_y2:
-                    crop_img[
-                        dst_y1:dst_y2,
-                        dst_x1:dst_x2
-                    ] = image[
-                        src_y1:src_y2,
-                        src_x1:src_x2
+                    crop_img[dst_y1:dst_y2, dst_x1:dst_x2] = image[
+                        src_y1:src_y2, src_x1:src_x2
                     ]
 
                 # ------------------------------------------------------------------
@@ -148,7 +143,6 @@ def process_results(results, save_crops=True, crop_dir="pipeline_output/crops"):
     return image_detections
 
 
-
 def run_pipeline(
     model_path,
     image_dir,
@@ -159,7 +153,9 @@ def run_pipeline(
 ):
     model = YOLO(model_path)
     os.makedirs(os.path.dirname(output_json), exist_ok=True)
-    results = model(image_dir, imgsz=608, batch=batch_size, save=save_detections, verbose=False)
+    results = model(
+        image_dir, imgsz=608, batch=batch_size, save=save_detections, verbose=False
+    )
     detections = process_results(results, save_crops)
     torch.cuda.empty_cache()
     del model
@@ -309,7 +305,6 @@ def apply_global_nms(annotations, iou_threshold=0.2, class_agnostic=True):
     return [annotations[i] for i in keep]
 
 
-
 def crop_region_from_slide(
     slide_path,
     x,
@@ -401,9 +396,7 @@ def crop_region_from_slide(
 
         region = image.crop((src_x1, src_y1, src_x2, src_y2))
 
-    crosses_boundary = (
-        src_x1 > x1 or src_y1 > y1 or src_x2 < x2 or src_y2 < y2
-    )
+    crosses_boundary = src_x1 > x1 or src_y1 > y1 or src_x2 < x2 or src_y2 < y2
 
     # --------------------------------------------------------------
     # 3. HANDLE BOUNDARIES (BLACK ONLY WHERE NEEDED)
@@ -430,7 +423,6 @@ def crop_region_from_slide(
         return final_path
 
     return crop_img
-
 
 
 async def crop_and_save(
@@ -547,7 +539,7 @@ async def update_annotations_db(
     db, patient_id, test_id, filename, annotationId, all_annotations
 ):
     from sqlalchemy.orm import selectinload
-    
+
     # Use JOIN to fetch Sample with Annotations in a single query
     sample_query = (
         select(Sample)
@@ -564,14 +556,14 @@ async def update_annotations_db(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Sample not found or does not belong to this test.",
         )
-    
+
     # Find the annotation from preloaded annotations
     existing_annotation = None
     for anno in sample.annotations:
         if str(anno.id) == annotationId:
             existing_annotation = anno
             break
-    
+
     if not existing_annotation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -580,7 +572,7 @@ async def update_annotations_db(
     # Update existing annotation
     existing_annotation.tool = "point"
     existing_annotation.isClassDetected = True
-    
+
     await db.flush()
     # Get existing annotation boxes
     existing_boxes_query = select(AnnotationBox).where(
@@ -626,14 +618,13 @@ async def update_annotations_db(
     return True
 
 
-
 def apply_filters(
     image_path: str,
     brightness_factor: float = 1.0,
     saturation_factor: float = 1.0,
     contrast_factor: float = 1.0,
-    method: str = '',
-    strength: Union[int, float] = 2
+    method: str = "",
+    strength: Union[int, float] = 2,
 ) -> np.ndarray:
     bgr = cv2.imread(image_path)
     if bgr is None:
@@ -652,25 +643,29 @@ def apply_filters(
         result = np.clip(result, 0, 1)
 
     if saturation_factor != 1.0:
-        hsv = cv2.cvtColor((result * 255).astype(np.uint8), cv2.COLOR_RGB2HSV).astype(np.float32)
+        hsv = cv2.cvtColor((result * 255).astype(np.uint8), cv2.COLOR_RGB2HSV).astype(
+            np.float32
+        )
         hsv[..., 1] *= saturation_factor
         hsv[..., 1] = np.clip(hsv[..., 1], 0, 255)
-        result = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB).astype(np.float32) / 255.0
+        result = (
+            cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB).astype(np.float32)
+            / 255.0
+        )
 
     result = (result * 255).astype(np.uint8)
 
     # 🧹 Apply filter if specified
-    if method == 'gaussian':
+    if method == "gaussian":
         ksize = int(strength) * 2 + 1
         result = cv2.GaussianBlur(result, (ksize, ksize), sigmaX=0)
-    elif method == 'box':
+    elif method == "box":
         ksize = int(strength) * 2 + 1
         result = cv2.blur(result, (ksize, ksize))
-    elif method == 'median':
+    elif method == "median":
         ksize = int(strength)
         if ksize % 2 == 0:
             ksize += 1
         result = cv2.medianBlur(result, ksize)
 
     return result
-

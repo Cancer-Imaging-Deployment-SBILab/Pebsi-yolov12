@@ -27,7 +27,12 @@ def yolov12_inference(image, video, model_id, image_size, conf_threshold):
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         output_video_path = tempfile.mktemp(suffix=".webm")
-        out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'vp80'), fps, (frame_width, frame_height))
+        out = cv2.VideoWriter(
+            output_video_path,
+            cv2.VideoWriter_fourcc(*"vp80"),
+            fps,
+            (frame_width, frame_height),
+        )
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -45,7 +50,9 @@ def yolov12_inference(image, video, model_id, image_size, conf_threshold):
 
 
 def yolov12_inference_for_examples(image, model_path, image_size, conf_threshold):
-    annotated_image, _ = yolov12_inference(image, None, model_path, image_size, conf_threshold)
+    annotated_image, _ = yolov12_inference(
+        image, None, model_path, image_size, conf_threshold
+    )
     return annotated_image
 
 
@@ -88,14 +95,32 @@ def app():
                 yolov12_infer = gr.Button(value="Detect Objects")
 
             with gr.Column():
-                output_image = gr.Image(type="numpy", label="Annotated Image", visible=True)
+                output_image = gr.Image(
+                    type="numpy", label="Annotated Image", visible=True
+                )
                 output_video = gr.Video(label="Annotated Video", visible=False)
 
         def update_visibility(input_type):
-            image = gr.update(visible=True) if input_type == "Image" else gr.update(visible=False)
-            video = gr.update(visible=False) if input_type == "Image" else gr.update(visible=True)
-            output_image = gr.update(visible=True) if input_type == "Image" else gr.update(visible=False)
-            output_video = gr.update(visible=False) if input_type == "Image" else gr.update(visible=True)
+            image = (
+                gr.update(visible=True)
+                if input_type == "Image"
+                else gr.update(visible=False)
+            )
+            video = (
+                gr.update(visible=False)
+                if input_type == "Image"
+                else gr.update(visible=True)
+            )
+            output_image = (
+                gr.update(visible=True)
+                if input_type == "Image"
+                else gr.update(visible=False)
+            )
+            output_video = (
+                gr.update(visible=False)
+                if input_type == "Image"
+                else gr.update(visible=True)
+            )
 
             return image, video, output_image, output_video
 
@@ -105,12 +130,17 @@ def app():
             outputs=[image, video, output_image, output_video],
         )
 
-        def run_inference(image, video, model_id, image_size, conf_threshold, input_type):
+        def run_inference(
+            image, video, model_id, image_size, conf_threshold, input_type
+        ):
             if input_type == "Image":
-                return yolov12_inference(image, None, model_id, image_size, conf_threshold)
+                return yolov12_inference(
+                    image, None, model_id, image_size, conf_threshold
+                )
             else:
-                return yolov12_inference(None, video, model_id, image_size, conf_threshold)
-
+                return yolov12_inference(
+                    None, video, model_id, image_size, conf_threshold
+                )
 
         yolov12_infer.click(
             fn=run_inference,
@@ -141,19 +171,18 @@ def app():
                 conf_threshold,
             ],
             outputs=[output_image],
-            cache_examples='lazy',
+            cache_examples="lazy",
         )
+
 
 gradio_app = gr.Blocks()
 with gradio_app:
-    gr.HTML(
-        """
+    gr.HTML("""
     <h1 style='text-align: center'>
     YOLOv12: Attention-Centric Real-Time Object Detectors
     </h1>
     """)
-    gr.HTML(
-        """
+    gr.HTML("""
         <h3 style='text-align: center'>
         <a href='https://arxiv.org/abs/2502.12524' target='_blank'>arXiv</a> | <a href='https://github.com/sunsmarterjie/yolov12' target='_blank'>github</a>
         </h3>
@@ -161,5 +190,5 @@ with gradio_app:
     with gr.Row():
         with gr.Column():
             app()
-if __name__ == '__main__':
+if __name__ == "__main__":
     gradio_app.launch()

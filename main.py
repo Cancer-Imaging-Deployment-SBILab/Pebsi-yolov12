@@ -49,21 +49,23 @@ logger.setLevel(logging.INFO)
 logger.handlers.clear()  # Clear any existing handlers
 
 # File handler for logging to file (overwrite on restart)
-file_handler = logging.FileHandler(LOG_FILE, mode='w', encoding='utf-8')
+file_handler = logging.FileHandler(LOG_FILE, mode="w", encoding="utf-8")
 file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(logging.Formatter(
-    "%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-))
+file_handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
+)
 logger.addHandler(file_handler)
 
 # Console handler for logging to stdout
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(logging.Formatter(
-    "%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-))
+console_handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
+)
 logger.addHandler(console_handler)
 
 logger.propagate = False  # Prevent duplicate logs
@@ -73,22 +75,22 @@ def verify_internal_service_key(request: Request):
     """
     Verify the internal service API key from the request header.
     This ensures only authorized internal services can access this API.
-    
+
     Args:
         request: FastAPI Request object
-        
+
     Raises:
         HTTPException: If the API key is missing or invalid
     """
     api_key = request.headers.get(INTERNAL_SERVICE_API_KEY_HEADER)
-    
+
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing internal service API key",
             headers={"WWW-Authenticate": "ApiKey"},
         )
-    
+
     # Use constant-time comparison to prevent timing attacks
     if not secrets.compare_digest(api_key, INTERNAL_SERVICE_API_KEY):
         raise HTTPException(
@@ -136,7 +138,9 @@ TEMP_FOLDER = os.path.join(BASE_DIR, "temp")
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 # DETECTION_MODEL_PATH = "./models/model.pt"
-DETECTION_MODEL_PATH = os.path.join(BASE_DIR, "models", "detection_models", "best_new_2.pt")
+DETECTION_MODEL_PATH = os.path.join(
+    BASE_DIR, "models", "detection_models", "best_new_2.pt"
+)
 
 # Add CORS middleware
 app.add_middleware(
@@ -166,12 +170,12 @@ async def log_requests(request: Request, call_next):
     """
     start_time = datetime.now()
     client_ip = request.client.host if request.client else "unknown"
-    
+
     logger.info(f"REQUEST: {client_ip} - {request.method} {request.url.path}")
 
     try:
         response = await call_next(request)
-        
+
         duration = (datetime.now() - start_time).total_seconds()
         logger.info(
             f"RESPONSE: {client_ip} - {request.method} {request.url.path} - Status {response.status_code} - Duration {duration:.3f}s"
@@ -179,7 +183,9 @@ async def log_requests(request: Request, call_next):
         return response
     except Exception as e:
         duration = (datetime.now() - start_time).total_seconds()
-        logger.error(f"ERROR: {client_ip} - {request.method} {request.url.path} - {str(e)} - Duration {duration:.3f}s")
+        logger.error(
+            f"ERROR: {client_ip} - {request.method} {request.url.path} - {str(e)} - Duration {duration:.3f}s"
+        )
         raise
 
 
@@ -213,7 +219,7 @@ async def detect_boxes(
         model_path = data.model_path
         filter_data = data.filter_data
 
-        if not os.path.exists(model_path) or not model_path or model_path == "":        
+        if not os.path.exists(model_path) or not model_path or model_path == "":
             model_path = DETECTION_MODEL_PATH
 
         temp_dir = os.path.join(
@@ -227,8 +233,8 @@ async def detect_boxes(
                 # filtered_image = apply_filters(
                 #     image_path,
                 #     brightness_factor=filter_data.get('brightness_factor'),
-                #     saturation_factor=filter_data.get('saturation_factor'), 
-                #     contrast_factor=filter_data.get('contrast_factor'), 
+                #     saturation_factor=filter_data.get('saturation_factor'),
+                #     contrast_factor=filter_data.get('contrast_factor'),
                 #     method=filter_data.get('method'),
                 #     strength= filter_data.get('strength'),
                 # )
@@ -295,5 +301,5 @@ async def detect_boxes(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=False, workers=4)
-    # uvicorn.run("main:app", host="0.0.0.0", port=8201, reload=True, workers=4)
+    # uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=False, workers=4)
+    uvicorn.run("main:app", host="0.0.0.0", port=8201, reload=True, workers=4)

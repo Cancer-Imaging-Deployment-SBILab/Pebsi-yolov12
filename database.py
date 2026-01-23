@@ -72,7 +72,9 @@ def _serialize_old_values(obj):
 
 def _safe_user_id(raw_user_id):
     fallback_allowed = os.getenv("AUDIT_ALLOW_FALLBACK", "0") == "1"
-    fallback = os.getenv("AUDIT_FALLBACK_USER_ID", "00000000-0000-0000-0000-000000000000")
+    fallback = os.getenv(
+        "AUDIT_FALLBACK_USER_ID", "00000000-0000-0000-0000-000000000000"
+    )
     try:
         if raw_user_id:
             return uuid.UUID(str(raw_user_id))
@@ -179,9 +181,11 @@ class AuditedAsyncSession(AsyncSession):
         table_name = None
         final_froms = statement.get_final_froms()
         if final_froms:
-            table_name = getattr(final_froms[0], "name", None) or getattr(
-                final_froms[0], "__tablename__", None
-            ) or str(final_froms[0])
+            table_name = (
+                getattr(final_froms[0], "name", None)
+                or getattr(final_froms[0], "__tablename__", None)
+                or str(final_froms[0])
+            )
 
         if not table_name:
             return

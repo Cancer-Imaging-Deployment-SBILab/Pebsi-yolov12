@@ -65,7 +65,9 @@ class TestEnum(enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     name = Column(String, nullable=False, index=True)
     phone_no = Column(String, nullable=False)
     employee_id = Column(String, unique=True, nullable=False, index=True)
@@ -95,7 +97,9 @@ class User(Base):
 class Patient(Base):
     __tablename__ = "patients"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     name = Column(String, nullable=False, index=True)
     uhid = Column(String, unique=True, nullable=False, index=True)
     dob = Column(Date, nullable=False, index=True)
@@ -115,8 +119,12 @@ class Patient(Base):
 class Test(Base):
     __tablename__ = "tests"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    patient_id = Column(
+        UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True
+    )
     custom_sample_id = Column(String, unique=True, nullable=False, index=True)
     condition = Column(String, nullable=False)
     in_use = Column(Boolean, nullable=False, default=False)
@@ -136,9 +144,15 @@ class Test(Base):
 class Sample(Base):
     __tablename__ = "samples"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    patient_id = Column(
+        UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True
+    )
+    test_id = Column(
+        UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True
+    )
     isProcessed = Column(Boolean, nullable=False, default=False)
 
     sample_location = Column(String, nullable=False)
@@ -149,9 +163,7 @@ class Sample(Base):
     cbc = relationship("CompleteBloodCount", back_populates="sample", uselist=False)
     annotations = relationship("Annotation", back_populates="sample")
 
-    __table_args__ = (
-        Index("idx_sample_test_processed", "test_id", "isProcessed"),
-    )
+    __table_args__ = (Index("idx_sample_test_processed", "test_id", "isProcessed"),)
 
 
 # ======================================================
@@ -160,10 +172,18 @@ class Sample(Base):
 class Report(Base):
     __tablename__ = "reports"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
-    generated_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    patient_id = Column(
+        UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True
+    )
+    test_id = Column(
+        UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True
+    )
+    generated_by_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
 
     diagnosis = Column(String, nullable=False)
     report_location = Column(String, nullable=False)
@@ -180,9 +200,19 @@ class Report(Base):
 class CompleteBloodCount(Base):
     __tablename__ = "complete_blood_counts"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    sample_id = Column(UUID(as_uuid=True), ForeignKey("samples.id"), unique=True, nullable=False, index=True)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    sample_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("samples.id"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    test_id = Column(
+        UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True
+    )
 
     haemoglobin = Column(Float)
     pcv = Column(Float)
@@ -225,7 +255,9 @@ class Annotation(Base):
     __tablename__ = "annotations"
 
     id = Column(String, primary_key=True)
-    sample_id = Column(UUID(as_uuid=True), ForeignKey("samples.id"), nullable=False, index=True)
+    sample_id = Column(
+        UUID(as_uuid=True), ForeignKey("samples.id"), nullable=False, index=True
+    )
 
     source = Column(String, nullable=False)
     type = Column(String, nullable=False)
@@ -245,7 +277,9 @@ class Annotation(Base):
 
     __table_args__ = (
         Index("idx_annotation_workflow_class", "isProcessed", "isClassDetected"),
-        Index("idx_annotation_workflow_subclass", "isClassDetected", "isSubClassDetected"),
+        Index(
+            "idx_annotation_workflow_subclass", "isClassDetected", "isSubClassDetected"
+        ),
         Index("idx_annotation_workflow_segment", "isSubClassDetected", "isSegmented"),
         Index("idx_annotation_created_processed", "created_at", "isProcessed"),
         Index("idx_annotation_sample_processed", "sample_id", "isProcessed"),
@@ -258,8 +292,12 @@ class Annotation(Base):
 class AnnotationBox(Base):
     __tablename__ = "annotation_boxes"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    annotation_id = Column(String, ForeignKey("annotations.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    annotation_id = Column(
+        String, ForeignKey("annotations.id"), nullable=False, index=True
+    )
     boxes = Column(JSON, nullable=False)
 
     class_name = Column(String)
@@ -294,7 +332,9 @@ class AnnotationBox(Base):
 class WBCSubClassConfidences(Base):
     __tablename__ = "wbc_sub_class_confidences"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     annotation_box_id = Column(
         UUID(as_uuid=True),
         ForeignKey("annotation_boxes.id"),
@@ -311,7 +351,9 @@ class WBCSubClassConfidences(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    annotation_box = relationship("AnnotationBox", back_populates="wbc_sub_class_confidences")
+    annotation_box = relationship(
+        "AnnotationBox", back_populates="wbc_sub_class_confidences"
+    )
 
 
 # ======================================================
@@ -320,7 +362,9 @@ class WBCSubClassConfidences(Base):
 class CellClasses(Base):
     __tablename__ = "cell_classes"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     name = Column(String, nullable=False, unique=True, index=True)
     colors = Column(JSON, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -331,8 +375,12 @@ class CellClasses(Base):
 class CellSubClasses(Base):
     __tablename__ = "cell_sub_classes"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    class_id = Column(UUID(as_uuid=True), ForeignKey("cell_classes.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    class_id = Column(
+        UUID(as_uuid=True), ForeignKey("cell_classes.id"), nullable=False, index=True
+    )
     sub_class_name = Column(String, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -349,14 +397,28 @@ class CellSubClasses(Base):
 class TestAssignment(Base):
     __tablename__ = "test_assignments"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    assigned_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    assigned_to_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    assigned_by_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    assigned_to_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    test_id = Column(
+        UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True
+    )
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    assigned_by = relationship("User", back_populates="assignments_created", foreign_keys=[assigned_by_user_id])
-    assigned_to = relationship("User", back_populates="assignments_received", foreign_keys=[assigned_to_user_id])
+    assigned_by = relationship(
+        "User", back_populates="assignments_created", foreign_keys=[assigned_by_user_id]
+    )
+    assigned_to = relationship(
+        "User",
+        back_populates="assignments_received",
+        foreign_keys=[assigned_to_user_id],
+    )
     test = relationship("Test", back_populates="assignments")
 
     __table_args__ = (
@@ -367,13 +429,18 @@ class TestAssignment(Base):
         # Unique constraint to prevent duplicate assignments (same user assigned to same test twice)
         {"extend_existing": True},
     )
-    
+
     # Add unique constraint at table level
     __table_args__ = (
         Index("idx_assignment_to_test", "assigned_to_user_id", "test_id"),
         Index("idx_assignment_test_users", "test_id", "assigned_to_user_id"),
         # Unique constraint: a user can only be assigned to a specific test once
-        Index("uq_test_assignment_user_test", "test_id", "assigned_to_user_id", unique=True),
+        Index(
+            "uq_test_assignment_user_test",
+            "test_id",
+            "assigned_to_user_id",
+            unique=True,
+        ),
     )
 
 
@@ -383,11 +450,17 @@ class TestAssignment(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
     action = Column(String, nullable=False, index=True)
     table_name = Column(String, nullable=False, index=True)
-    user_ip_address = Column(String, nullable=False, server_default=text("inet_client_addr()"))
+    user_ip_address = Column(
+        String, nullable=False, server_default=text("inet_client_addr()")
+    )
     old_data = Column(JSON)
     new_data = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -408,8 +481,12 @@ class AuditLog(Base):
 class Session(Base):
     __tablename__ = "sessions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
     refresh_token_hash = Column(String, nullable=False, index=True)
 
     user_ip_address = Column(String, nullable=False)
@@ -420,7 +497,9 @@ class Session(Base):
     revoked = Column(Boolean, nullable=False, default=False)
 
     user = relationship("User", back_populates="sessions")
-    access_tokens = relationship("AccessToken", back_populates="session", cascade="all, delete-orphan")
+    access_tokens = relationship(
+        "AccessToken", back_populates="session", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_session_token_valid", "refresh_token_hash", "revoked", "expires_at"),
@@ -435,10 +514,16 @@ class Session(Base):
 class AccessToken(Base):
     __tablename__ = "access_tokens"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     token_hash = Column(String, nullable=False, unique=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, index=True)
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    session_id = Column(
+        UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, index=True
+    )
     role = Column(String, nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
