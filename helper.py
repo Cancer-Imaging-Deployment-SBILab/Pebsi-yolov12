@@ -315,6 +315,7 @@ def crop_region_from_slide(
     level=0,
     padding=40,
     min_size=300,
+    scale=None,
 ):
     """
     Returns or saves a square crop.
@@ -329,21 +330,54 @@ def crop_region_from_slide(
     # CLASS-BASED PADDING OVERRIDE
     # --------------------------------------------------------------
     if save_path:
-        if "WBC" in save_path:
-            padding = 80
-            min_size = 350
-        elif "RBC" in save_path:
-            padding = 40
-            min_size = 200
-        elif "Platelet" in save_path:
-            padding = 20
-            min_size = 100
-        elif "Artefact" in save_path:
-            padding = 80
-            min_size = 300
+        if scale == '40x':
+            if "WBC" in save_path:
+                padding = 80
+                min_size = 350
+            elif "RBC" in save_path:
+                padding = 40
+                min_size = 200
+            elif "Platelet" in save_path:
+                padding = 20
+                min_size = 100
+            elif "Artefact" in save_path:
+                padding = 80
+                min_size = 300
+            else:
+                padding = 40
+                min_size = 100
+        elif scale == '20x':
+            if "WBC" in save_path:
+                padding = 40
+                min_size = 175
+            elif "RBC" in save_path:
+                padding = 20
+                min_size = 100
+            elif "Platelet" in save_path:
+                padding = 10
+                min_size = 100
+            elif "Artefact" in save_path:
+                padding = 40
+                min_size = 175
+            else:
+                padding = 20
+                min_size = 100
         else:
-            padding = 40
-            min_size = 100
+            if "WBC" in save_path:
+                padding = 40
+                min_size = 175
+            elif "RBC" in save_path:
+                padding = 20
+                min_size = 100
+            elif "Platelet" in save_path:
+                padding = 10
+                min_size = 100
+            elif "Artefact" in save_path:
+                padding = 40
+                min_size = 175
+            else:
+                padding = 20
+                min_size = 100
 
     # --------------------------------------------------------------
     # 1. DEFINE SQUARE CROP IN SLIDE COORDS (NO RESIZING)
@@ -451,6 +485,17 @@ async def crop_and_save(
                 print(f"No matching slide file found for {filename} in {target_dir}")
                 return False
 
+            # Get sample to retrieve scale
+            sample_query = select(Sample).where(
+                Sample.test_id == test_id,
+                Sample.sample_location.like(f"%/{filename}.%"),
+            )
+            sample_result = await db.execute(sample_query)
+            sample = sample_result.scalar_one_or_none()
+            if not sample:
+                print(f"Sample not found for {filename} in test {test_id}")
+                return False
+
             # Get existing annotation boxes from database
             existing_boxes_query = select(AnnotationBox).where(
                 AnnotationBox.annotation_id == annotationId
@@ -473,7 +518,7 @@ async def crop_and_save(
                     if box.class_name == "WBC":
                         x, y, w, h = box.boxes
                         path = crop_region_from_slide(
-                            slide_path, x, y, w, h, crop_path_wbc, padding=80
+                            slide_path, x, y, w, h, crop_path_wbc, padding=80, scale=sample.scale
                         )
 
                         # Update crop_path in database
@@ -496,7 +541,7 @@ async def crop_and_save(
                     if box.class_name == "RBC":
                         x, y, w, h = box.boxes
                         path = crop_region_from_slide(
-                            slide_path, x, y, w, h, crop_path_rbc, padding=40
+                            slide_path, x, y, w, h, crop_path_rbc, padding=40, scale=sample.scale
                         )
 
                         # Update crop_path in database
@@ -519,7 +564,7 @@ async def crop_and_save(
                     if box.class_name == "Platelets":
                         x, y, w, h = box.boxes
                         path = crop_region_from_slide(
-                            slide_path, x, y, w, h, crop_path_platelet, padding=20
+                            slide_path, x, y, w, h, crop_path_platelet, padding=20, scale=sample.scale
                         )
 
                         # Update crop_path in database

@@ -154,6 +154,7 @@ class Sample(Base):
         UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True
     )
     isProcessed = Column(Boolean, nullable=False, default=False)
+    scale = Column(String, nullable=False)
 
     sample_location = Column(String, nullable=False)
     sample_datetime = Column(DateTime(timezone=True), server_default=func.now())
@@ -410,6 +411,8 @@ class TestAssignment(Base):
         UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False, index=True
     )
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+    isArchived = Column(Boolean, nullable=False, default=False)
+    archived_date = Column(DateTime(timezone=True), nullable=True)
 
     assigned_by = relationship(
         "User", back_populates="assignments_created", foreign_keys=[assigned_by_user_id]
