@@ -275,7 +275,7 @@ async def detect_boxes(
             filename,
             annotationId,
             final_deduced,
-            isRBC=False,
+            isRBC=True,
             isWBC=True,
             isPlatelet=True,
         )
