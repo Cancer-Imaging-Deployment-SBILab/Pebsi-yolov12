@@ -36,6 +36,12 @@ from fastapi import Request
 from datetime import datetime
 import secrets
 
+# HIPAA 164.312(e)(1) - Transmission Security
+from security.tls_enforcement import (
+    TLSEnforcementMiddleware,
+    validate_tls_configuration
+)
+
 # Constants and Configuration
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "detection_api_calls.log")
@@ -107,6 +113,15 @@ async def lifespan(app: FastAPI):
         await initialize_database()
         await create_tables()
         print("Database initialized successfully!")
+        
+        # HIPAA 164.312(e)(1) - Validate TLS configuration on startup
+        tls_status = validate_tls_configuration()
+        if tls_status["warnings"]:
+            for warning in tls_status["warnings"]:
+                logger.warning(f"TLS Configuration Warning: {warning}")
+        if tls_status["compliant"]:
+            logger.info("TLS Configuration: HIPAA 164.312(e)(1) Compliant")
+                
     except Exception as e:
         print(f"Failed to initialize database: {e}")
         raise e
@@ -151,6 +166,11 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+# HIPAA 164.312(e)(1) - TLS Enforcement Middleware
+# This middleware ensures all requests use HTTPS in production
+# and adds security headers to all responses
+app.add_middleware(TLSEnforcementMiddleware)
+
 
 # Middleware to log requests
 @app.middleware("http")
@@ -193,6 +213,39 @@ async def log_requests(request: Request, call_next):
 @app.get("/")
 async def root():
     return {"message": "Detection Model API is running"}
+
+
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for load balancers and monitoring.
+    
+    This endpoint is excluded from HTTPS enforcement to allow
+    health checks from internal infrastructure.
+    
+    Returns:
+        dict: Health status
+    """
+    return {"status": "healthy", "service": "pebsi-detection"}
+
+
+@app.get("/security/status")
+async def security_status():
+    """
+    HIPAA 164.312(e)(1) - Transmission Security Status
+    
+    Returns the current security configuration status for compliance auditing.
+    
+    Returns:
+        dict: Security configuration status
+    """
+    tls_status = validate_tls_configuration()
+    
+    return {
+        "hipaa_control": "164.312(e)(1) - Transmission Security",
+        "tls_enforcement": tls_status,
+        "compliant": tls_status["compliant"]
+    }
 
 
 @app.post("/detect_points")
