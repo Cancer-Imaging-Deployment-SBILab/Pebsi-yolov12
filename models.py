@@ -69,6 +69,7 @@ class User(Base):
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     name = Column(String, nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
     phone_no = Column(String, nullable=False)
     employee_id = Column(String, unique=True, nullable=False, index=True)
     password = Column(String, nullable=False)
@@ -89,6 +90,35 @@ class User(Base):
     )
     audit_logs = relationship("AuditLog", back_populates="user")
     sessions = relationship("Session", back_populates="user")
+
+
+# ======================================================
+# Email OTP
+# ======================================================
+class EmailOtp(Base):
+    __tablename__ = "email_otps"
+
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    email = Column(String, nullable=False, index=True)
+    purpose = Column(String, nullable=False, index=True)
+    otp_hash = Column(String, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    resend_count = Column(Integer, nullable=False, server_default=text("0"))
+    resend_window_start = Column(DateTime(timezone=True), nullable=True)
+    last_sent_at = Column(DateTime(timezone=True), nullable=True)
+    consumed = Column(Boolean, nullable=False, server_default=text("false"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_email_otp_user_purpose", "user_id", "purpose"),
+        Index("idx_email_otp_valid", "email", "purpose", "consumed", "expires_at"),
+        Index("uq_email_otp_user_purpose", "user_id", "purpose", unique=True),
+    )
 
 
 # ======================================================
