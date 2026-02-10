@@ -389,6 +389,34 @@ class CellSubClasses(Base):
 
 
 # ======================================================
+# ML Models
+# ======================================================
+class MLModel(Base):
+    __tablename__ = "ml_models"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    model_name = Column(String(255), nullable=False)
+    model_path = Column(String, nullable=False)
+    model_category = Column(String(100))
+    model_type = Column(String(10))
+    model_size_mb = Column(Float)
+    version = Column(String(50))
+    checksum_sha256 = Column(String(64), nullable=False, unique=True)
+    is_active = Column(Boolean, nullable=False, server_default=text("TRUE"))
+    id_default = Column(Boolean, nullable=False, server_default=text("FALSE"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_ml_models_category", "model_category"),
+        Index("idx_ml_models_name", "model_name"),
+    )
+
+
+# ======================================================
 # Test Assignment
 # ======================================================
 # This table supports assigning a test to MULTIPLE users.

@@ -1,5 +1,6 @@
 import os
 from ultralytics import YOLO
+import hashlib
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
@@ -36,6 +37,20 @@ import math
 
 from PIL import Image, ImageEnhance, ImageFilter
 from typing import Union
+
+
+def compute_sha256(file_path: str) -> str:
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def verify_checksum(file_path: str, expected_checksum: str) -> bool:
+    if not expected_checksum:
+        return True
+    return compute_sha256(file_path) == expected_checksum
 
 
 def process_results(results, save_crops=True, crop_dir="pipeline_output/crops"):

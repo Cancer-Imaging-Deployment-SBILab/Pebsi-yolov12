@@ -24,6 +24,7 @@ from helper import (
     crop_and_save,
     update_annotations_db,
     apply_filters,
+    compute_sha256,
 )
 import torch
 import gc
@@ -35,6 +36,8 @@ import logging
 from fastapi import Request
 from datetime import datetime
 import secrets
+from sqlalchemy import select
+from models import MLModel
 
 # Constants and Configuration
 LOG_DIR = os.path.join(BASE_DIR, "logs")
@@ -69,6 +72,36 @@ console_handler.setFormatter(
 logger.addHandler(console_handler)
 
 logger.propagate = False  # Prevent duplicate logs
+
+
+async def _verify_model_checksum(db: AsyncSession, model_path: str) -> None:
+    if not model_path or not os.path.exists(model_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Model file not found on disk.",
+        )
+
+    result = await db.execute(
+        select(MLModel).where(MLModel.model_path == model_path)
+    )
+    model = result.scalar_one_or_none()
+    if not model:
+        logger.warning("Model path not found in ml_models. Skipping checksum check.")
+        return
+    if not model.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selected model is inactive.",
+        )
+    if not model.checksum_sha256:
+        return
+
+    checksum = compute_sha256(model_path)
+    if checksum != model.checksum_sha256:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Model checksum mismatch. The model file may be corrupted.",
+        )
 
 
 def verify_internal_service_key(request: Request):
@@ -221,6 +254,8 @@ async def detect_boxes(
 
         if not os.path.exists(model_path) or not model_path or model_path == "":
             model_path = DETECTION_MODEL_PATH
+
+        await _verify_model_checksum(db, model_path)
 
         temp_dir = os.path.join(
             TEMP_FOLDER, f"{patient_id}_{test_id}_{filename}_{annotationId}"
