@@ -11,7 +11,6 @@ from fastapi import (
     Depends,
 )
 from fastapi import status
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from config import BASE_DIR, INTERNAL_SERVICE_API_KEY, INTERNAL_SERVICE_API_KEY_HEADER
 import os
@@ -34,6 +33,7 @@ from database import initialize_database, get_db, create_tables
 from audit import set_current_user
 import logging
 from fastapi import Request
+from middleware.security_middleware import security_middleware
 from datetime import datetime
 import secrets
 from sqlalchemy import select
@@ -175,14 +175,9 @@ DETECTION_MODEL_PATH = os.path.join(
     BASE_DIR, "models", "detection_models", "best_new_2.pt"
 )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
+
+# Security middleware for internal service access only
+app.middleware("http")(security_middleware)
 
 
 # Middleware to log requests
