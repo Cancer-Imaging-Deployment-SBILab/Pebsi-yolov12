@@ -437,7 +437,7 @@ class MLModel(Base):
     version = Column(String(50))
     checksum_sha256 = Column(String(64), nullable=False, unique=True)
     is_active = Column(Boolean, nullable=False, server_default=text("TRUE"))
-    id_default = Column(Boolean, nullable=False, server_default=text("FALSE"))
+    is_default = Column(Boolean, nullable=False, server_default=text("FALSE"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
