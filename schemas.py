@@ -15,8 +15,11 @@ class DetectBoxesRequest(BaseModel):
     annotationId: str
     all_images: List[str]
     source_url: str
-    model_path: str
+    model_id: Optional[str] = None
     filter_data: dict
+    generate_rbc_crops: bool = True
+    generate_wbc_crops: bool = True
+    generate_platelets_crops: bool = True
 
     class Config:
         from_attributes = True

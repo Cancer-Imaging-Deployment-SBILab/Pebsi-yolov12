@@ -104,6 +104,47 @@ async def _verify_model_checksum(db: AsyncSession, model_path: str) -> None:
         )
 
 
+async def _resolve_detection_model_by_id_or_default(
+    db: AsyncSession, model_id: str | None
+) -> MLModel:
+    if model_id:
+        query = select(MLModel).where(
+            MLModel.id == model_id,
+            MLModel.model_category == "detection_models",
+        )
+        result = await db.execute(query)
+        model = result.scalar_one_or_none()
+        if not model:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Specified detection model not found in database.",
+            )
+    else:
+        query = (
+            select(MLModel)
+            .where(
+                MLModel.model_category == "detection_models",
+                MLModel.is_default.is_(True),
+            )
+            .order_by(MLModel.created_at.desc())
+        )
+        result = await db.execute(query)
+        model = result.scalars().first()
+        if not model:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Default detection model not found.",
+            )
+
+    if not model.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selected detection model is inactive.",
+        )
+
+    return model
+
+
 def verify_internal_service_key(request: Request):
     """
     Verify the internal service API key from the request header.
@@ -169,12 +210,6 @@ TEMP_FOLDER = os.path.join(BASE_DIR, "temp")
 
 
 os.makedirs(TEMP_FOLDER, exist_ok=True)
-
-# DETECTION_MODEL_PATH = "./models/model.pt"
-DETECTION_MODEL_PATH = os.path.join(
-    BASE_DIR, "models", "detection_models", "best_new_2.pt"
-)
-
 
 # Security middleware for internal service access only
 app.middleware("http")(security_middleware)
@@ -244,12 +279,15 @@ async def detect_boxes(
         annotationId = data.annotationId
         all_images = data.all_images
         source_url = data.source_url
-        model_path = data.model_path
+        model_id = data.model_id
         filter_data = data.filter_data
+        generate_rbc_crops = data.generate_rbc_crops
+        generate_wbc_crops = data.generate_wbc_crops
+        generate_platelets_crops = data.generate_platelets_crops
 
-        if not os.path.exists(model_path) or not model_path or model_path == "":
-            model_path = DETECTION_MODEL_PATH
-
+        model = await _resolve_detection_model_by_id_or_default(db, model_id)
+        model_path = model.model_path
+        
         await _verify_model_checksum(db, model_path)
 
         temp_dir = os.path.join(
@@ -305,9 +343,9 @@ async def detect_boxes(
             filename,
             annotationId,
             final_deduced,
-            isRBC=True,
-            isWBC=True,
-            isPlatelet=True,
+            isRBC=generate_rbc_crops,
+            isWBC=generate_wbc_crops,
+            isPlatelet=generate_platelets_crops,
         )
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
@@ -316,6 +354,8 @@ async def detect_boxes(
             content={"message": f"Boxes detected and saved Successfully."},
             status_code=status.HTTP_200_OK,
         )
+    except HTTPException as http_ex:
+        raise http_ex
     except Exception as e:
         print(e)
         raise HTTPException(
@@ -331,5 +371,5 @@ async def detect_boxes(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=False, workers=4)
-    # uvicorn.run("main:app", host="0.0.0.0", port=8201, reload=True, workers=4)
+    # uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=False, workers=4)
+    uvicorn.run("main:app", host="0.0.0.0", port=8201, reload=True, workers=4)
