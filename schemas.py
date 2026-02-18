@@ -1,7 +1,7 @@
 import json
 from typing import List, Optional, Union
 from fastapi import Form, HTTPException
-from pydantic import UUID4, BaseModel
+from pydantic import BaseModel
 from datetime import datetime, date
 from uuid import UUID
 from enum import Enum

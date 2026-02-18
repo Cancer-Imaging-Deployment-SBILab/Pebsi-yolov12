@@ -66,7 +66,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     name = Column(String, nullable=False, index=True)
     email = Column(String, nullable=False, index=True)
@@ -99,7 +99,7 @@ class EmailOtp(Base):
     __tablename__ = "email_otps"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     user_id = Column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
@@ -128,7 +128,7 @@ class Patient(Base):
     __tablename__ = "patients"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     name = Column(String, nullable=False, index=True)
     uhid = Column(String, unique=True, nullable=False, index=True)
@@ -150,7 +150,7 @@ class Test(Base):
     __tablename__ = "tests"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     patient_id = Column(
         UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True
@@ -175,7 +175,7 @@ class Sample(Base):
     __tablename__ = "samples"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     patient_id = Column(
         UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True
@@ -204,7 +204,7 @@ class Report(Base):
     __tablename__ = "reports"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     patient_id = Column(
         UUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True
@@ -232,7 +232,7 @@ class CompleteBloodCount(Base):
     __tablename__ = "complete_blood_counts"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     sample_id = Column(
         UUID(as_uuid=True),
@@ -324,7 +324,7 @@ class AnnotationBox(Base):
     __tablename__ = "annotation_boxes"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     annotation_id = Column(
         String, ForeignKey("annotations.id"), nullable=False, index=True
@@ -364,7 +364,7 @@ class WBCSubClassConfidences(Base):
     __tablename__ = "wbc_sub_class_confidences"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     annotation_box_id = Column(
         UUID(as_uuid=True),
@@ -394,7 +394,7 @@ class CellClasses(Base):
     __tablename__ = "cell_classes"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     name = Column(String, nullable=False, unique=True, index=True)
     colors = Column(JSON, nullable=False)
@@ -407,7 +407,7 @@ class CellSubClasses(Base):
     __tablename__ = "cell_sub_classes"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     class_id = Column(
         UUID(as_uuid=True), ForeignKey("cell_classes.id"), nullable=False, index=True
@@ -427,7 +427,7 @@ class MLModel(Base):
     id = Column(
         UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("gen_random_uuid()"),
+        server_default=text("uuidv7()"),
     )
     model_name = Column(String(255), nullable=False)
     model_path = Column(String, nullable=False)
@@ -457,7 +457,7 @@ class TestAssignment(Base):
     __tablename__ = "test_assignments"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     assigned_by_user_id = Column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
@@ -512,7 +512,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     user_id = Column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
@@ -543,7 +543,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     user_id = Column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
@@ -576,7 +576,7 @@ class AccessToken(Base):
     __tablename__ = "access_tokens"
 
     id = Column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
     )
     token_hash = Column(String, nullable=False, unique=True, index=True)
     user_id = Column(
