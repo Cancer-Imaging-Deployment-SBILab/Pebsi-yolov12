@@ -1,6 +1,11 @@
 import enum
+import os
+import base64
+import hashlib
 from datetime import datetime, timezone
 import pytz
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from sqlalchemy import (
     Boolean,
@@ -15,9 +20,13 @@ from sqlalchemy import (
     text,
     func,
     Index,
+    event,
+    or_,
+    literal,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSON
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import TypeDecorator
 
 from database import Base
 
@@ -31,6 +40,130 @@ def convert_utc_to_timezone(utc_dt: datetime, tz_str: str = "Asia/Kolkata") -> d
     if utc_dt.tzinfo is None:
         utc_dt = utc_dt.replace(tzinfo=timezone.utc)
     return utc_dt.astimezone(pytz.timezone(tz_str))
+
+
+_AADHAR_ENC_PREFIX = "enc:v1:"
+_AADHAR_ENC_PREFIX_V2 = "enc:v2:"
+
+
+def _required_env_value(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
+def _aadhar_key() -> bytes:
+    secret = _required_env_value("AADHAR_ENCRYPTION_KEY")
+    return hashlib.sha256(secret.encode("utf-8")).digest()
+
+
+def aadhar_lookup_hash(value: str) -> str:
+    if value is None:
+        return None
+    pepper = _required_env_value("AADHAR_HASH_PEPPER")
+    value_str = str(value)
+    return hashlib.sha256(f"{pepper}:{value_str}".encode("utf-8")).hexdigest()
+
+
+def encrypt_aadhar_value_v1(value: str) -> str:
+    if value is None:
+        return None
+
+    value_str = str(value)
+    if value_str.startswith(_AADHAR_ENC_PREFIX) or value_str.startswith(
+        _AADHAR_ENC_PREFIX_V2
+    ):
+        return value_str
+
+    key = _aadhar_key()
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(value_str.encode("utf-8")) + padder.finalize()
+
+    cipher = Cipher(algorithms.AES(key), modes.ECB())
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(padded) + encryptor.finalize()
+    encoded = base64.urlsafe_b64encode(ciphertext).decode("utf-8")
+    return f"{_AADHAR_ENC_PREFIX}{encoded}"
+
+
+def encrypt_aadhar_value(value: str) -> str:
+    if value is None:
+        return None
+
+    value_str = str(value)
+    if value_str.startswith(_AADHAR_ENC_PREFIX) or value_str.startswith(
+        _AADHAR_ENC_PREFIX_V2
+    ):
+        return value_str
+
+    key = _aadhar_key()
+    nonce = os.urandom(12)
+    cipher = Cipher(algorithms.AES(key), modes.GCM(nonce))
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(value_str.encode("utf-8")) + encryptor.finalize()
+    payload = nonce + encryptor.tag + ciphertext
+    encoded = base64.urlsafe_b64encode(payload).decode("utf-8")
+    return f"{_AADHAR_ENC_PREFIX_V2}{encoded}"
+
+
+def _decrypt_aadhar_value_v1(value_str: str) -> str:
+    encoded = value_str[len(_AADHAR_ENC_PREFIX) :]
+    ciphertext = base64.urlsafe_b64decode(encoded.encode("utf-8"))
+
+    key = _aadhar_key()
+    cipher = Cipher(algorithms.AES(key), modes.ECB())
+    decryptor = cipher.decryptor()
+    padded = decryptor.update(ciphertext) + decryptor.finalize()
+
+    unpadder = padding.PKCS7(128).unpadder()
+    plaintext = unpadder.update(padded) + unpadder.finalize()
+    return plaintext.decode("utf-8")
+
+
+def _decrypt_aadhar_value_v2(value_str: str) -> str:
+    encoded = value_str[len(_AADHAR_ENC_PREFIX_V2) :]
+    payload = base64.urlsafe_b64decode(encoded.encode("utf-8"))
+    if len(payload) < 28:
+        raise ValueError("Invalid Aadhaar encrypted payload")
+
+    nonce = payload[:12]
+    tag = payload[12:28]
+    ciphertext = payload[28:]
+
+    cipher = Cipher(algorithms.AES(_aadhar_key()), modes.GCM(nonce, tag))
+    decryptor = cipher.decryptor()
+    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+    return plaintext.decode("utf-8")
+
+
+def decrypt_aadhar_value(value: str) -> str:
+    if value is None:
+        return None
+
+    value_str = str(value)
+    if value_str.startswith(_AADHAR_ENC_PREFIX_V2):
+        return _decrypt_aadhar_value_v2(value_str)
+    if value_str.startswith(_AADHAR_ENC_PREFIX):
+        return _decrypt_aadhar_value_v1(value_str)
+    if not value_str.startswith(_AADHAR_ENC_PREFIX):
+        return value_str
+    return value_str
+
+
+class EncryptedAadharType(TypeDecorator):
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return encrypt_aadhar_value(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return decrypt_aadhar_value(value)
 
 
 # ======================================================
@@ -134,13 +267,38 @@ class Patient(Base):
     uhid = Column(String, unique=True, nullable=False, index=True)
     dob = Column(Date, nullable=False, index=True)
     phone_no = Column(String, nullable=False)
-    aadhar = Column(String, nullable=False, index=True)
+    aadhar = Column(EncryptedAadharType(512), nullable=False, index=True)
+    aadhar_hash = Column(String(64), nullable=True, index=True)
     gender = Column(Enum(GenderEnum), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    @classmethod
+    def aadhar_lookup_condition(cls, plain_aadhar: str):
+        # Hash lookup is preferred for new/hashed rows; v1/plain fallback keeps old rows queryable.
+        hash_value = aadhar_lookup_hash(plain_aadhar)
+        legacy_v1_value = encrypt_aadhar_value_v1(plain_aadhar)
+        plain_value = str(plain_aadhar)
+        return or_(
+            cls.aadhar_hash == hash_value,
+            cls.__table__.c.aadhar == literal(legacy_v1_value, type_=String()),
+            cls.__table__.c.aadhar == literal(plain_value, type_=String()),
+        )
 
     tests = relationship("Test", back_populates="patient")
     samples = relationship("Sample", back_populates="patient")
     reports = relationship("Report", back_populates="patient")
+
+
+@event.listens_for(Patient, "before_insert")
+def set_patient_aadhar_hash_before_insert(mapper, connection, target):
+    if target.aadhar is not None:
+        target.aadhar_hash = aadhar_lookup_hash(target.aadhar)
+
+
+@event.listens_for(Patient, "before_update")
+def set_patient_aadhar_hash_before_update(mapper, connection, target):
+    if target.aadhar is not None:
+        target.aadhar_hash = aadhar_lookup_hash(target.aadhar)
 
 
 # ======================================================

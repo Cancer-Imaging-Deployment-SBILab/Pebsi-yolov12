@@ -32,3 +32,4 @@ openslide-bin==4.0.0.8
 sqlalchemy==2.0.40
 asyncpg==0.30.0
 pytz==2024.1
+python-jose[cryptography]==3.4.0
