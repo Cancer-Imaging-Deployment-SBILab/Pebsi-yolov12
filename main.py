@@ -1,5 +1,6 @@
 import shutil
 from contextlib import asynccontextmanager
+import ssl
 import cv2
 from fastapi import (
     BackgroundTasks,
@@ -12,7 +13,17 @@ from fastapi import (
 )
 from fastapi import status
 from fastapi.responses import JSONResponse
-from config import BASE_DIR, INTERNAL_SERVICE_API_KEY, INTERNAL_SERVICE_API_KEY_HEADER
+from config import (
+    BASE_DIR,
+    MTLS_ENABLED,
+    SERVICE_HOST,
+    SERVICE_PORT,
+    SERVICE_REFRESH,
+    SSL_CA_FILE,
+    SSL_CERT_FILE,
+    SSL_KEY_FILE,
+    SSL_REQUIRE_CLIENT_CERT,
+)
 import os
 from schemas import DetectBoxesRequest
 from helper import (
@@ -35,7 +46,6 @@ import logging
 from fastapi import Request
 from middleware.security_middleware import security_middleware
 from datetime import datetime
-import secrets
 from sqlalchemy import select
 from models import MLModel
 
@@ -145,34 +155,6 @@ async def _resolve_detection_model_by_id_or_default(
     return model
 
 
-def verify_internal_service_key(request: Request):
-    """
-    Verify the internal service API key from the request header.
-    This ensures only authorized internal services can access this API.
-
-    Args:
-        request: FastAPI Request object
-
-    Raises:
-        HTTPException: If the API key is missing or invalid
-    """
-    api_key = request.headers.get(INTERNAL_SERVICE_API_KEY_HEADER)
-
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing internal service API key",
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
-
-    # Use constant-time comparison to prevent timing attacks
-    if not secrets.compare_digest(api_key, INTERNAL_SERVICE_API_KEY):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid internal service API key",
-        )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for FastAPI application"""
@@ -264,7 +246,6 @@ async def detect_boxes(
     data: DetectBoxesRequest,
     db: db_dependency,
     request: Request,
-    _: None = Depends(verify_internal_service_key),
 ):
 
     try:
@@ -371,5 +352,34 @@ async def detect_boxes(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=False, workers=4)
+    uvicorn_kwargs = {
+        "app": "main:app",
+        "host": SERVICE_HOST,
+        "port": SERVICE_PORT,
+        "reload": SERVICE_REFRESH,
+        "workers": 4,
+    }
+
+    if MTLS_ENABLED:
+        if not SSL_CERT_FILE or not SSL_KEY_FILE or not SSL_CA_FILE:
+            raise RuntimeError(
+                "mTLS is enabled but SSL_CERT_FILE / SSL_KEY_FILE / SSL_CA_FILE are not fully configured."
+            )
+
+        # TLS flow:
+        # 1) Server presents its certificate to backend client.
+        # 2) Backend verifies server cert against CA.
+        # 3) Server requests backend client certificate and validates it against CA.
+        uvicorn_kwargs.update(
+            {
+                "ssl_certfile": SSL_CERT_FILE,
+                "ssl_keyfile": SSL_KEY_FILE,
+                "ssl_ca_certs": SSL_CA_FILE,
+                "ssl_cert_reqs": ssl.CERT_REQUIRED
+                if SSL_REQUIRE_CLIENT_CERT
+                else ssl.CERT_NONE,
+            }
+        )
+
+    uvicorn.run(**uvicorn_kwargs)
     # uvicorn.run("main:app", host="0.0.0.0", port=8201, reload=True, workers=4)
