@@ -17,15 +17,16 @@ async def security_middleware(request: Request, call_next):
         return await call_next(request)
 
     if MTLS_ENABLED:
-        # mTLS-enabled deployments must use HTTPS transport.
-        # When a client certificate is missing or invalid, TLS handshake fails
-        # before this middleware runs, so this check only guards protocol bypasses.
-        forwarded_proto = request.headers.get("x-forwarded-proto", "")
-        proto = (forwarded_proto.split(",")[0].strip() or request.url.scheme).lower()
-        if proto != "https":
+        # mTLS is enforced at the transport layer by Uvicorn (ssl_cert_reqs=ssl.CERT_REQUIRED).
+        # Any request that reaches this point over HTTPS already had its client certificate
+        # verified during the TLS handshake — Uvicorn rejects invalid/missing certs before
+        # the ASGI app is invoked.
+        # Do NOT use X-Forwarded-Proto — it is attacker-controlled.
+        # request.url.scheme is set by Uvicorn from the actual socket SSL state, not headers.
+        if request.url.scheme != "https":
             return JSONResponse(
                 status_code=403,
-                content={"detail": "mTLS required"},
+                content={"detail": "mTLS required: HTTPS connection required"},
             )
 
     if INTERNAL_JWT_ENABLED:
