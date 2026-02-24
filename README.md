@@ -8,7 +8,8 @@ FastAPI microservice for blood-cell detection in the PebSI platform.
 - Boundary NMS + global NMS deduplication
 - Annotation box updates in PostgreSQL
 - Optional crop generation (`RBC`, `WBC`, `Platelet`)
-- mTLS-ready internal service transport
+- Mandatory mTLS internal service transport
+- Mandatory internal service-to-service JWT
 - Model resolution from `ml_models` with SHA-256 integrity verification
 - Request logging and audit-context propagation
 
@@ -63,11 +64,16 @@ Common runtime values:
 
 mTLS values:
 
-- `MTLS_ENABLED`
-- `SSL_REQUIRE_CLIENT_CERT`
 - `SSL_CA_FILE`
 - `SSL_CERT_FILE`
 - `SSL_KEY_FILE`
+
+Internal JWT values:
+
+- `INTERNAL_JWT_SECRET` (required)
+- `INTERNAL_JWT_ISSUER`
+- `INTERNAL_JWT_AUDIENCE`
+- `INTERNAL_JWT_ALGORITHM`
 
 Security hardening:
 

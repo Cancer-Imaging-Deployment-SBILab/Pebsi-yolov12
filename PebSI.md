@@ -34,7 +34,7 @@ At shutdown:
 
 - disposes async SQLAlchemy engine safely.
 
-The service runs with `uvicorn` and supports optional TLS/mTLS based on env configuration.
+The service runs with `uvicorn` and is deployed behind mandatory HTTPS with mTLS, plus a mandatory internal service-to-service JWT.
 
 ## API endpoints
 
@@ -96,21 +96,21 @@ Response on success:
 Implemented in `middleware/security_middleware.py` and mounted in `main.py`.
 
 - Exempt paths: `/docs`, `/redoc`, `/openapi.json`.
-- If `MTLS_ENABLED=true`, non-HTTPS requests are rejected (`403 mTLS required`).
+- Non-HTTPS requests are rejected (`403 mTLS required`).
+- A valid internal JWT (`Authorization: Bearer <token>`) is required on all non-exempt paths (`401` on missing/invalid token).
 - Requests with blocked user-agent keywords are rejected (`403 Client not allowed`).
 
 Blocked user-agent list is configurable by `SECURITY_BLOCKED_USER_AGENTS`.
 
 ## TLS / mTLS behavior
 
-When `MTLS_ENABLED=true`, `main.py` configures uvicorn SSL options from:
+`main.py` configures uvicorn SSL options from:
 
 - `SSL_CERT_FILE`
 - `SSL_KEY_FILE`
 - `SSL_CA_FILE`
-- `SSL_REQUIRE_CLIENT_CERT`
 
-If cert values are missing while mTLS is enabled, the service raises a startup error.
+If cert values are missing, the service raises a startup error.
 
 ## Logging
 
@@ -169,12 +169,17 @@ Expected detection category in this service:
 
 ### Security / mTLS
 
-- `MTLS_ENABLED` (`true` by default)
-- `SSL_REQUIRE_CLIENT_CERT` (`true` by default)
 - `SSL_CA_FILE`
 - `SSL_CERT_FILE`
 - `SSL_KEY_FILE`
 - `SECURITY_BLOCKED_USER_AGENTS` (CSV)
+
+### Security / internal JWT
+
+- `INTERNAL_JWT_SECRET` (required)
+- `INTERNAL_JWT_ISSUER` (default `pebsi-backend`)
+- `INTERNAL_JWT_AUDIENCE` (default `pebsi-internal`)
+- `INTERNAL_JWT_ALGORITHM` (default `HS256`)
 
 ### Optional shared secrets
 
@@ -195,7 +200,7 @@ python main.py
 
 Default API URL:
 
-- `http://localhost:8001` (or HTTPS when mTLS is enabled)
+- `https://localhost:8001`
 
 ## Notes
 

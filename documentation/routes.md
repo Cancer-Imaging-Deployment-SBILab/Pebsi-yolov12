@@ -2,9 +2,9 @@
 
 ## Base URL
 
-Default local URL: `http://localhost:8001`
+Default local URL: `https://localhost:8001`
 
-When `MTLS_ENABLED=true`, clients are expected to use HTTPS and present valid certs per deployment policy.
+Clients are expected to use HTTPS and present valid mTLS client certificates per deployment policy.
 
 ## 1) Health
 
@@ -71,7 +71,8 @@ Fields:
 ### Security middleware
 
 - Exempts `/docs`, `/redoc`, `/openapi.json`
-- Enforces HTTPS transport when `MTLS_ENABLED=true`
+- Enforces HTTPS transport (mTLS)
+- Requires `Authorization: Bearer <internal-jwt>` on all non-exempt paths
 - Rejects blocked user-agents from `SECURITY_BLOCKED_USER_AGENTS`
 
 ### Logging middleware
