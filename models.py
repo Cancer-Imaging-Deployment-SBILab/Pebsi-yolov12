@@ -640,18 +640,11 @@ class TestAssignment(Base):
     )
     test = relationship("Test", back_populates="assignments")
 
+    # Add unique constraint at table level
     __table_args__ = (
         # Composite index for efficient lookups by assigned user and test
         Index("idx_assignment_to_test", "assigned_to_user_id", "test_id"),
         # Composite index for efficient lookups by test (to find all assigned users)
-        Index("idx_assignment_test_users", "test_id", "assigned_to_user_id"),
-        # Unique constraint to prevent duplicate assignments (same user assigned to same test twice)
-        {"extend_existing": True},
-    )
-
-    # Add unique constraint at table level
-    __table_args__ = (
-        Index("idx_assignment_to_test", "assigned_to_user_id", "test_id"),
         Index("idx_assignment_test_users", "test_id", "assigned_to_user_id"),
         # Unique constraint: a user can only be assigned to a specific test once
         Index(
@@ -660,6 +653,8 @@ class TestAssignment(Base):
             "assigned_to_user_id",
             unique=True,
         ),
+        # Unique constraint to prevent duplicate assignments (same user assigned to same test twice)
+        {"extend_existing": True},
     )
 
 
