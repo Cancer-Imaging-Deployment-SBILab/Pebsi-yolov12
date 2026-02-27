@@ -701,10 +701,13 @@ async def update_annotations_db(
 def apply_filters(
     image_path: str,
     brightness_factor: float = 1.0,
-    saturation_factor: float = 1.0,
     contrast_factor: float = 1.0,
-    method: str = "",
-    strength: Union[int, float] = 2,
+    red_factor: float = 1.0,
+    green_factor: float = 1.0,
+    blue_factor: float = 1.0,
+    hue_shift_degrees: float = 0.0,
+    saturation_factor: float = 1.0,
+    value_factor: float = 1.0,
 ) -> np.ndarray:
     bgr = cv2.imread(image_path)
     if bgr is None:
@@ -722,30 +725,39 @@ def apply_filters(
         result = result * brightness_factor
         result = np.clip(result, 0, 1)
 
-    if saturation_factor != 1.0:
+    if red_factor != 1.0:
+        result[..., 0] *= red_factor
+        result[..., 0] = np.clip(result[..., 0], 0, 1)
+
+    if green_factor != 1.0:
+        result[..., 1] *= green_factor
+        result[..., 1] = np.clip(result[..., 1], 0, 1)
+
+    if blue_factor != 1.0:
+        result[..., 2] *= blue_factor
+        result[..., 2] = np.clip(result[..., 2], 0, 1)
+
+    if hue_shift_degrees != 0.0 or saturation_factor != 1.0 or value_factor != 1.0:
         hsv = cv2.cvtColor((result * 255).astype(np.uint8), cv2.COLOR_RGB2HSV).astype(
             np.float32
         )
-        hsv[..., 1] *= saturation_factor
-        hsv[..., 1] = np.clip(hsv[..., 1], 0, 255)
+
+        if hue_shift_degrees != 0.0:
+            hsv[..., 0] = (hsv[..., 0] + (hue_shift_degrees / 2.0)) % 180.0
+
+        if saturation_factor != 1.0:
+            hsv[..., 1] *= saturation_factor
+            hsv[..., 1] = np.clip(hsv[..., 1], 0, 255)
+
+        if value_factor != 1.0:
+            hsv[..., 2] *= value_factor
+            hsv[..., 2] = np.clip(hsv[..., 2], 0, 255)
+
         result = (
             cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB).astype(np.float32)
             / 255.0
         )
 
     result = (result * 255).astype(np.uint8)
-
-    # 🧹 Apply filter if specified
-    if method == "gaussian":
-        ksize = int(strength) * 2 + 1
-        result = cv2.GaussianBlur(result, (ksize, ksize), sigmaX=0)
-    elif method == "box":
-        ksize = int(strength) * 2 + 1
-        result = cv2.blur(result, (ksize, ksize))
-    elif method == "median":
-        ksize = int(strength)
-        if ksize % 2 == 0:
-            ksize += 1
-        result = cv2.medianBlur(result, ksize)
 
     return result

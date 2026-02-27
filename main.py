@@ -268,7 +268,6 @@ async def detect_boxes(
 
         model = await _resolve_detection_model_by_id_or_default(db, model_id)
         model_path = model.model_path
-        
         await _verify_model_checksum(db, model_path)
 
         temp_dir = os.path.join(
@@ -279,19 +278,52 @@ async def detect_boxes(
         for image_path in all_images:
             if os.path.exists(image_path):
                 count += 1
-                # filtered_image = apply_filters(
-                #     image_path,
-                #     brightness_factor=filter_data.get('brightness_factor'),
-                #     saturation_factor=filter_data.get('saturation_factor'),
-                #     contrast_factor=filter_data.get('contrast_factor'),
-                #     method=filter_data.get('method'),
-                #     strength= filter_data.get('strength'),
-                # )
-                # image_name = os.path.basename(image_path)
-                # image_path = os.path.join(temp_dir, image_name)
-                # output_bgr = cv2.cvtColor(filtered_image, cv2.COLOR_RGB2BGR)
-                # cv2.imwrite(image_path, output_bgr)
-                shutil.copy(image_path, temp_dir)
+                filtered_image = apply_filters(
+                    image_path,
+                    brightness_factor=float(
+                        filter_data.get("brightness_factor", 1.0) or 1.0
+                    ),
+                    contrast_factor=float(
+                        filter_data.get("contrast_factor", 1.0) or 1.0
+                    ),
+                    red_factor=float(
+                        filter_data.get(
+                            "red_factor", filter_data.get("rgb_correction_factor", 1.0)
+                        )
+                        or 1.0
+                    ),
+                    green_factor=float(
+                        filter_data.get(
+                            "green_factor",
+                            filter_data.get("rgb_correction_factor", 1.0),
+                        )
+                        or 1.0
+                    ),
+                    blue_factor=float(
+                        filter_data.get(
+                            "blue_factor", filter_data.get("rgb_correction_factor", 1.0)
+                        )
+                        or 1.0
+                    ),
+                    hue_shift_degrees=float(
+                        filter_data.get("hue_shift_degrees", 0.0) or 0.0
+                    ),
+                    saturation_factor=float(
+                        filter_data.get(
+                            "hsv_saturation_factor",
+                            filter_data.get("saturation_factor", 1.0),
+                        )
+                        or 1.0
+                    ),
+                    value_factor=float(
+                        filter_data.get("value_factor", 1.0) or 1.0
+                    ),
+                )
+                image_name = os.path.basename(image_path)
+                temp_output_path = os.path.join(temp_dir, image_name)
+
+                output_bgr = cv2.cvtColor(filtered_image, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(temp_output_path, output_bgr)
             else:
                 print(f"File not found: {image_path}")
         # Now the temp_dir can be used for detection
@@ -328,8 +360,6 @@ async def detect_boxes(
             isWBC=generate_wbc_crops,
             isPlatelet=generate_platelets_crops,
         )
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
         print(6, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         return JSONResponse(
             content={"message": f"Boxes detected and saved Successfully."},
