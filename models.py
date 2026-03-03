@@ -324,6 +324,9 @@ class Test(Base):
     report = relationship("Report", back_populates="test", uselist=False)
     blood_counts = relationship("CompleteBloodCount", back_populates="test")
     assignments = relationship("TestAssignment", back_populates="test")
+    filter_settings = relationship(
+        "TestFilterSettings", back_populates="test", uselist=False
+    )
 
 
 # ======================================================
@@ -751,4 +754,47 @@ class AccessToken(Base):
         Index("idx_token_user_active", "user_id", "revoked", "expires_at"),
         Index("idx_token_expires_revoked", "expires_at", "revoked"),
         Index("idx_token_session_active", "session_id", "revoked"),
+    )
+
+
+# ======================================================
+# Test Filter Settings
+# ======================================================
+class TestFilterSettings(Base):
+    """Stores per-test image filter parameters applied during detection."""
+
+    __tablename__ = "test_filter_settings"
+
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
+    )
+    test_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tests.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    # Filter factors — all default to 1.0 (no change) except hue_shift_degrees which defaults to 0.0
+    brightness_factor = Column(Float, nullable=False, server_default=text("1.0"))
+    saturation_factor = Column(Float, nullable=False, server_default=text("1.0"))
+    hsv_saturation_factor = Column(Float, nullable=False, server_default=text("1.0"))
+    contrast_factor = Column(Float, nullable=False, server_default=text("1.0"))
+    red_factor = Column(Float, nullable=False, server_default=text("1.0"))
+    green_factor = Column(Float, nullable=False, server_default=text("1.0"))
+    blue_factor = Column(Float, nullable=False, server_default=text("1.0"))
+    hue_shift_degrees = Column(Float, nullable=False, server_default=text("0.0"))
+    value_factor = Column(Float, nullable=False, server_default=text("1.0"))
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    test = relationship("Test", back_populates="filter_settings")
+
+    __table_args__ = (
+        Index("idx_test_filter_test_id", "test_id"),
     )
